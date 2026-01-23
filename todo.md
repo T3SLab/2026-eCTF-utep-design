@@ -1,5 +1,27 @@
 ## Below are the current tasks, assignments
 
+01/28/2025
+
+* Going through MITRE documents and code
+    * EVERYONE
+
+* Attack the reference design
+    * https://rules.ectf.mitre.org/2026/flags/design_flags.html
+    * Get a boards;
+    * Sebastian Mateo; Pablo;
+
+* Check the reference design 1 BYTE overflow bug in `get_uart_handle`, also check whole code base carefully
+    * Sebastian Mateo; Pablo, Gildardo;
+
+* Code understanding
+    * https://github.com/T3SLab/2026-eCTF-utep-design/tree/release
+    * Explain each and every line
+    * Gildardo, Sebastian ochoa
+
+* Draft reference design
+    * Prepare a draft reference docment with all security mechanism
+    * Gildardo, Sebastian ochoa, Mia, Alex
+----
 01/23/2025
 
 * Going through MITRE documents and code
