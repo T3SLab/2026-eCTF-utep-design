@@ -1,0 +1,14 @@
+- Boot Flag
+	- ectf{boot_e2218e27c4d4255d}
+- Debugger Flag
+	- ectf{debugger_6df518bce5033499}
+- Steal Design
+	- x
+- Read Design
+	- y
+- Read Update
+	- z
+- Compromise Machine
+	- a
+- Backdoor Design
+	- b
