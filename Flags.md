@@ -1,5 +1,7 @@
 - Boot Flag
 	- ectf{boot_e2218e27c4d4255d}
+- Testing Service Flag
+	- ectf{testing_9661bdd29525132d}
 - Debugger Flag
 	- ectf{debugger_6df518bce5033499}
 - Steal Design
