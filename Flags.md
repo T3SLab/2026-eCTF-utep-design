@@ -5,7 +5,7 @@
 - Debugger Flag
 	- ectf{debugger_6df518bce5033499}
 - Steal Design
-	- x
+	- ectf{steal_6dc6921061cf5b43}
 - Read Design
 	- y
 - Read Update
