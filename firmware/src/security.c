@@ -12,15 +12,16 @@
  */
 #include "security.h"
 #include "host_messaging.h"
+#include "simple_crypto.h"
+#include <secrets.h>
 
-bool check_pin(unsigned char *pin) {
+extern const uint8_t HSMPIN_HASH[16];
+
+bool check_pin(unsigned char* pin) {
     print_debug("Checking PIN\n");
-
-    // TODO: the reference design doesn't implement *ANY* security.
-    // This function currently does nothing. Your team should add the
-    // appropriate security checks here to implement the security
-    // requirements.
-    return true;
+    uint8_t hash_out[16];
+    hash(pin, strlen((char*)pin), hash_out);
+    return memcmp(hash_out, HSMPIN_HASH, sizeof(HSMPIN_HASH)) == 0;
 }
 
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {

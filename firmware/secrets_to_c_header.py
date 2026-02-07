@@ -10,6 +10,7 @@ own risk!
 Copyright: Copyright (c) 2026 The MITRE Corporation
 """
 
+import hashlib
 import os
 import json
 import argparse
@@ -91,7 +92,13 @@ def secrets_to_c_header(
         f.write("#ifndef __SECRETS_H__\n")
         f.write("#define __SECRETS_H__\n\n")
         f.write('#include "security.h"\n\n')
-        f.write(f'#define HSM_PIN "{hsm_pin}"\n\n')
+        pin_hash = hashlib.md5(hsm_pin.encode()).digest()
+        f.write("// Precomputed MD5 hash of HSM PIN (16 bytes)\n")
+        f.write("static const uint8_t HSMPIN_HASH[16] = {\n")
+        for i, byte in enumerate(pin_hash):
+            f.write(f"  0x{byte:02x}{',' if i < 15 else ''}\n")
+        f.write("};\n\n")
+
         f.write("const static group_permission_t global_permissions[MAX_PERMS] = {\n")
         for i, perm in enumerate(permissions):
             f.write(

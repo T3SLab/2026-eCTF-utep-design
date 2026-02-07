@@ -16,7 +16,6 @@
 #define ECTF_CRYPTO_H
 
 #include <stdint.h>
-
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/hash.h"
 
