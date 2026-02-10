@@ -103,7 +103,32 @@ int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *plaintex
  */
 int hash(void *data, size_t len, uint8_t *hash_out) {
     // Pass values to hash
-    return wc_Md5Hash((uint8_t *)data, len, hash_out);
+    return wc_Sha256Hash((uint8_t *)data, len, hash_out);
+}
+
+int hmac_sha256(const uint8_t *key, size_t key_len,const uint8_t *data, size_t data_len,
+        uint8_t *mac_out) {
+    Hmac hmac;
+    int ret;
+    
+    ret = wc_HmacInit(&hmac, NULL, INVALID_DEVID);
+    if (ret != 0){
+        return ret;
+    }
+    
+    ret = wc_HmacSetKey(&hmac, WC_SHA256, key, (word32)key_len);
+    if (ret != 0){
+        return ret;
+    }
+    
+    ret = wc_HmacUpdate(&hmac, data, (word32)data_len);
+    if (ret != 0){
+     return ret;
+    }
+    
+    ret = wc_HmacFinal(&hmac, mac_out);
+    wc_HmacFree(&hmac);
+    return ret;
 }
 
 #endif

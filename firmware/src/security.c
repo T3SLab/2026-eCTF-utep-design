@@ -15,13 +15,20 @@
 #include "simple_crypto.h"
 #include <secrets.h>
 
-extern const uint8_t HSMPIN_HASH[16];
+extern const uint8_t HSMPIN_HMAC[32];
 
 bool check_pin(unsigned char* pin) {
     print_debug("Checking PIN\n");
-    uint8_t hash_out[16];
-    hash(pin, strlen((char*)pin), hash_out);
-    return memcmp(hash_out, HSMPIN_HASH, sizeof(HSMPIN_HASH)) == 0;
+    if (pin == NULL) {
+        return false;
+    }
+    else{
+        uint8_t mac_out[32];
+        
+        hmac_sha256(HMAC_KEY, 32, pin, strlen((char*)pin), mac_out);
+
+        return memcmp(mac_out, HSMPIN_HMAC, 32) == 0;
+    }
 }
 
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {
@@ -30,9 +37,20 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     sprintf(output_buf, "Checking %c permissions for group: %hx\n", perm, group_id);
     print_debug(output_buf);
 
-    // TODO: the reference design doesn't implement *ANY* security.
-    // This function currently does nothing. Your team should add the
-    // appropriate security checks here to implement the security
-    // requirements.
-    return true;
+    bool found = false;
+    for (int i = 0; i < MAX_PERMS; i++) {
+        bool match = (global_permissions[i].group_id == group_id);
+        if(match){
+            found = true;
+            switch (perm) {
+                case PERM_READ:
+                    return global_permissions[i].read;
+                case PERM_WRITE:
+                    return global_permissions[i].write;
+                case PERM_RECEIVE:
+                    return global_permissions[i].receive;
+                default:
+                    return false; // Invalid permission type
+            }
+        }
 }

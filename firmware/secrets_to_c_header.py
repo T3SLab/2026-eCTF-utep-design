@@ -11,6 +11,9 @@ Copyright: Copyright (c) 2026 The MITRE Corporation
 """
 
 import hashlib
+import sys
+import random
+import hmac
 import os
 import json
 import argparse
@@ -92,11 +95,21 @@ def secrets_to_c_header(
         f.write("#ifndef __SECRETS_H__\n")
         f.write("#define __SECRETS_H__\n\n")
         f.write('#include "security.h"\n\n')
-        pin_hash = hashlib.md5(hsm_pin.encode()).digest()
-        f.write("// Precomputed MD5 hash of HSM PIN (16 bytes)\n")
-        f.write("static const uint8_t HSMPIN_HASH[16] = {\n")
-        for i, byte in enumerate(pin_hash):
-            f.write(f"  0x{byte:02x}{',' if i < 15 else ''}\n")
+
+        rng = random.SystemRandom()
+        hmac_key = rng.randbytes(32)
+
+        f.write("//random bytes for HMAC key (32 bytes)\n")
+        f.write("static const uint8_t HMAC_KEY[32] = {\n")
+        for i, byte in enumerate(hmac_key):
+            f.write(f"  0x{byte:02x}{',' if i < 31 else ''}\n")
+        f.write("};\n\n")
+
+        hmac_tag = hmac.new(hmac_key, hsm_pin.encode(), hashlib.sha256).digest()
+        f.write("// Precomputed HMAC of HSM PIN (32 bytes)\n")
+        f.write("static const uint8_t HSMPIN_HMAC[32] = {\n")
+        for i, byte in enumerate(hmac_tag):
+            f.write(f"  0x{byte:02x}{',' if i < 31 else ''}\n")
         f.write("};\n\n")
 
         f.write("const static group_permission_t global_permissions[MAX_PERMS] = {\n")

@@ -17,12 +17,13 @@
 
 #include <stdint.h>
 #include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/hash.h"
+#include "wolfssl/wolfcrypt/sha256.h"
+#include "wolfssl/wolfcrypt/hmac.h"
 
 /******************************** MACRO DEFINITIONS ********************************/
 #define BLOCK_SIZE AES_BLOCK_SIZE
 #define KEY_SIZE 16
-#define HASH_SIZE MD5_DIGEST_SIZE
+#define HASH_SIZE SHA256_DIGEST_SIZE
 
 /******************************** FUNCTION PROTOTYPES ********************************/
 /** @brief Encrypts plaintext using a symmetric cipher
@@ -66,6 +67,19 @@ int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *plaintex
  * @return 0 on success, non-zero for other error
  */
 int hash(void *data, size_t len, uint8_t *hash_out);
+
+
+/** @brief Computes HMAC of data using SHA-256
+ * 
+ * @param key A pointer to a buffer of length key_len containing the HMAC key
+ * @param key_len The length of the HMAC key in bytes
+ * @param data A pointer to a buffer of length data_len containing the data to be authenticated
+ * @param data_len The length of the data to be authenticated in bytes
+ * @param mac_out A pointer to a buffer of length HASH_SIZE (32 bytes) where the resulting HMAC output will be written to
+ */
+int hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
+    uint8_t *mac_out);
+
 
 #endif // CRYPTO_EXAMPLE
 #endif // ECTF_CRYPTO_H
