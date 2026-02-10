@@ -52,5 +52,8 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
                 default:
                     return false; // Invalid permission type
             }
+      
         }
+    }
+    return false;
 }
