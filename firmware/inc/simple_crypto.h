@@ -61,7 +61,7 @@ int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *plaintex
  * @param data A pointer to a buffer of length len containing the data
  *           to be hashed
  * @param len The length of the plaintext to hash
- * @param hash_out A pointer to a buffer of length HASH_SIZE (16 bytes) where the resulting
+ * @param hash_out A pointer to a buffer of length HASH_SIZE (32 bytes) where the resulting
  *           hash output will be written to
  *
  * @return 0 on success, non-zero for other error
