@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "rng.h"
 #include "simple_flash.h"
 #include "host_messaging.h"
 #include "commands.h"
@@ -99,6 +100,8 @@ void crypto_example(void) {
 void init() {
     // Initialize all of the hardware components
     SYSCFG_DL_init();
+
+    rng_init();
 
     init_fs();
 }
