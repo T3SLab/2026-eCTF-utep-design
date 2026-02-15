@@ -48,6 +48,8 @@ CFLAGS += -I./wolfssl
 # we need to build these objects for the simple crypto example
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
+OBJECTS += $(WOLFSSL_INC)/rsa.o $(WOLFSSL_INC)/sha256.o
+CFLAGS += -DWOLFSSL_SHA256
 endif
 
 NAME = hsm

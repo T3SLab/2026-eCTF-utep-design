@@ -18,31 +18,32 @@
 
 #define TIMEOUT_TIMER TIMG0
 
-bool check_pin(unsigned char *pin) {
-    print_debug("Checking PIN\n");
-    if (pin == NULL) {
-        print_debug("PIN is NULL\n");
-        return false;
-    }
-    else if (strcmp((char *)pin, "1234") != 0) {
-        print_debug("PIN is incorrect\n");
-        return false;
-    }
+bool check_pin(unsigned char *input_pin) {
+    uint8_t input_hash[32];
+    wc_Sha256 hash_ctx;
+    
+    wc_InitSha256(&hash_ctx);
+    wc_Sha256Update(&hash_ctx, input_pin, strlen((char*)input_pin));
+    wc_Sha256Final(&hash_ctx, input_hash);
 
+    if (memcmp(input_hash, PIN_HASH, 32) != 0) {
+        timeout_start_4s();
+        return false;
+    }
     return true;
 }
-
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     char output_buf[128] = {0};
 
     sprintf(output_buf, "Checking %c permissions for group: %hx\n", perm, group_id);
     print_debug(output_buf);
 
-    // TODO: the reference design doesn't implement *ANY* security.
-    // This function currently does nothing. Your team should add the
-    // appropriate security checks here to implement the security
-    // requirements.
-    return true;
+    if ((PERM_MATRIX[group_id] & requested_action) != 0) {
+        return true; // Match found [cite: 294]
+    }
+    
+    timeout_start_4s(); // Auth Failure [cite: 299]
+    return false;
 }
 
 

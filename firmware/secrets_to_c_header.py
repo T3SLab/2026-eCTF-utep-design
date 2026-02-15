@@ -13,6 +13,7 @@ Copyright: Copyright (c) 2026 The MITRE Corporation
 import os
 import json
 import argparse
+import hashlib
 from dataclasses import dataclass
 
 
@@ -100,6 +101,23 @@ def secrets_to_c_header(
             )
         f.write("};\n")
         f.write("\n#endif  // __SECRETS_H__\n")
+
+def secrets_to_c_header(permissions, path, hsm_pin, secrets_bin):
+    pin_hash = hashlib.sha256(hsm_pin.encode()).digest()
+        
+    with open(os.path.join(path, "secrets.h"), 'w') as f:
+        f.write("#ifndef __SECRETS_H__\n#define __SECRETS_H__\n\n")
+        f.write('#include <stdint.h>\n\n')
+        
+        f.write(f"const uint8_t PIN_HASH[32] = {{ {', '.join(hex(b) for b in pin_hash)} }};\n\n")
+        
+        f.write("const uint8_t RSA_PRIV_KEY[] = { /* Binary DER Data */ };\n\n")
+        
+        f.write("const uint8_t PERM_MATRIX[MAX_GROUPS] = {\n")
+        for perm in permissions:
+            mask = (0x01 if perm.read else 0) | (0x02 if perm.write else 0) | (0x04 if perm.receive else 0)
+            f.write(f"    [{hex(perm.group_id)}] = {hex(mask)},\n")
+        f.write("};\n\n#endif\n")
 
 if __name__ == '__main__':
     def parse_args():
