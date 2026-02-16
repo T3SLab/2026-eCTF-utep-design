@@ -6,16 +6,16 @@
 #include <ti/driverlib/dl_trng.h>
 
 void rng_init(void){
-    DL_TRNG_enablePower(TRNG0);
+    DL_TRNG_enablePower(TRNG);
 }
 
 uint32_t trng_get_word(void){
     
-    while(!DL_TRNG_isCaptureReady(TRNG0)){
+    while(!DL_TRNG_isCaptureReady(TRNG)){
         ;
     }
 
-    return DL_TRNG_getCapture(TRNG0);
+    return DL_TRNG_getCapture(TRNG);
 }
 
 //TODO: test this out, I have no idea if it actually works -SebL

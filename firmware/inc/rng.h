@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-
+#endif
+ 
 /**
  * @brief Initializes the True Random Number Generator (TRNG) hardware.
 */
