@@ -99,6 +99,9 @@ def secrets_to_c_header(
         rng = random.SystemRandom()
         hmac_key = rng.randbytes(32)
 
+        rsa_priv_key = secrets[:256] 
+        rsa_pub_key_other = secrets[256:512]
+
         f.write("//random bytes for HMAC key (32 bytes)\n")
         f.write("static const uint8_t HMAC_KEY[32] = {\n")
         for i, byte in enumerate(hmac_key):
@@ -110,6 +113,18 @@ def secrets_to_c_header(
         f.write("static const uint8_t HSMPIN_HMAC[32] = {\n")
         for i, byte in enumerate(hmac_tag):
             f.write(f"  0x{byte:02x}{',' if i < 31 else ''}\n")
+        f.write("};\n\n")
+
+        f.write("// RSA Private Key for signing challenges\n")
+        f.write("static const uint8_t RSA_PRIV_KEY[256] = {\n")
+        for i, byte in enumerate(rsa_priv_key):
+            f.write(f"  0x{byte:02x}{',' if i < 255 else ''}\n")
+        f.write("};\n\n")
+
+        f.write("// RSA Public Key for verifying other HSMs\n")
+        f.write("static const uint8_t RSA_PUB_KEY_OTHER[256] = {\n")
+        for i, byte in enumerate(rsa_pub_key_other):
+            f.write(f"  0x{byte:02x}{',' if i < 255 else ''}\n")
         f.write("};\n\n")
 
         f.write("const static group_permission_t global_permissions[MAX_PERMS] = {\n")

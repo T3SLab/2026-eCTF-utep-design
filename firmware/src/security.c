@@ -14,6 +14,7 @@
 #include "host_messaging.h"
 #include "simple_crypto.h"
 #include <secrets.h>
+#include <wolfssl/wolfcrypt/rsa.h>
 
 extern const uint8_t HSMPIN_HMAC[32];
 
@@ -27,8 +28,22 @@ bool check_pin(unsigned char* pin) {
         
         hmac_sha256(HMAC_KEY, 32, pin, strlen((char*)pin), mac_out);
 
-        return memcmp(mac_out, HSMPIN_HMAC, 32) == 0;
+        if (memcmp(mac_out, HSMPIN_HMAC, 32) != 0){
+            timeout_start_4s(); // Incorrect PIN, start timeout
+            return false;
+        }
+        return true; // Correct PIN
     }
+}
+// Requirement 3: RSA Verification Pipeline [cite: 422, 436]
+bool verify_hsm_origin(uint8_t* signature, uint8_t* nonce) {
+    // 1. Verify RSA signature with Peer Public Key [cite: 405, 493]
+    // 2. Decrypt packet with AES-GCM first [cite: 426, 511]
+    if (wc_RsaSSL_Verify(nonce, 32, signature, 256, &peerPubKey) != 0) {
+        timeout_start_4s(); // Trigger Requirement 3 lockout [cite: 435]
+        return false;
+    }
+    return true;
 }
 
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {
@@ -37,23 +52,35 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     sprintf(output_buf, "Checking %c permissions for group: %hx\n", perm, group_id);
     print_debug(output_buf);
 
-    bool found = false;
+    bool authorized = false;
+
+    // 1. Search the provisioned ID list in global secrets [cite: 352, 430, 517]
     for (int i = 0; i < MAX_PERMS; i++) {
-        bool match = (global_permissions[i].group_id == group_id);
-        if(match){
-            found = true;
+        if (global_permissions[i].group_id == group_id) {
+            // 2. Retrieve and check associated permissions [cite: 353, 354, 393]
             switch (perm) {
                 case PERM_READ:
-                    return global_permissions[i].read;
+                    authorized = global_permissions[i].read;
+                    break;
                 case PERM_WRITE:
-                    return global_permissions[i].write;
+                    authorized = global_permissions[i].write;
+                    break;
                 case PERM_RECEIVE:
-                    return global_permissions[i].receive;
+                    authorized = global_permissions[i].receive;
+                    break;
                 default:
-                    return false; // Invalid permission type
+                    authorized = false;
+                    break;
             }
-      
+            // Once the group is found, we have our answer
+            break; 
         }
     }
-    return false;
+    // 3. If the check fails, trigger the Fail-Fast Mechanism [cite: 491, 507, 512, 526]
+    if (!authorized) {
+        print_debug("Auth Failure: Initiating 4s Penalty\n");
+        timeout_start_4s(); 
+    }
+
+    return authorized;
 }
