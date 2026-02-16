@@ -41,6 +41,7 @@ void generate_list_files(list_response_t *file_list) {
 
             file_list->metadata[file_list->n_files].slot = i;
             file_list->metadata[file_list->n_files].group_id = temp_file.group_id;
+            //TODO: check this function for potetnail buffer overflow vulnerability
             strcpy(file_list->metadata[file_list->n_files].name, (char *)&temp_file.name);
             file_list->n_files++;
         }

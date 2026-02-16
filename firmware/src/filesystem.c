@@ -52,6 +52,7 @@ bool is_slot_in_use(slot_t slot) {
  *
  * @return 0 upon success. A negative value otherwise.
 */
+// TODO: This function looks like it has a serious buffer overflow vulnerability. Fix it.
 int create_file(
     file_t *dest,
     group_id_t group_id,
@@ -67,6 +68,7 @@ int create_file(
 
     // name must be null terminated, and the contents are defined by a length
     strcpy(dest->name, name);
+    //contents_len should be less than MAX_CONTENTS_SIZE, but no checking is done here. This is a potential vulnerability.
     memcpy(dest->contents, contents, contents_len);
 
     return 0;
