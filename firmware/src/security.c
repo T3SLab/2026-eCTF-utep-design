@@ -26,19 +26,24 @@ static volatile bool timeout_elapsed = false;
 
 bool check_pin(unsigned char* pin) {
     print_debug("Checking PIN\n");
+
     if (pin == NULL) {
         return false;
     }
-    else{
-        uint8_t mac_out[32];
-        
-        hmac_sha256(HMAC_KEY, 32, pin, strlen((char*)pin), mac_out);
 
-        if (memcmp(mac_out, HSMPIN_HMAC, 32) != 0){
-            timeout_start_4s(); // Incorrect PIN, start timeout
-            return false;
-        }
-        return true; // Correct PIN
+    uint8_t mac_out[32];
+    
+    // Use a fixed size (e.g., 6) instead of strlen to ensure the 
+    // hash matches the provisioned HSMPIN_HMAC exactly.
+    hmac_sha256(HMAC_KEY, 32, pin, 6, mac_out); 
+
+    if (memcmp(mac_out, HSMPIN_HMAC, 32) == 0) {
+        print_debug("PIN Correct!\n");
+        return true;
+    } else {
+        print_debug("PIN Incorrect\n");
+        timeout_start_4s();
+        return false;
     }
 }
 bool verify_hsm_origin(uint8_t* signature, uint8_t* nonce) {

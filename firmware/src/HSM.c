@@ -153,7 +153,6 @@ int main(void) {
 
         // Handle list command
         case LIST_MSG:
-
 #ifdef CRYPTO_EXAMPLE
             // Run the crypto example
             // TODO: Remove this from your design
