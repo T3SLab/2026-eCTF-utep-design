@@ -110,21 +110,27 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
 }
 
 void timeout_start_4s(void) {
-    print_debug("Initiating randomized security lockout\n");
-        
-    /* Step 1: Enable power and reset TIMG0 via SOCLOCK */
-    // The member is named GENSYSRST in this specific SDK version
-    SYSCTL->SOCLOCK.GENSYSRST |= (1 << 28); 
-    SYSCTL->SOCLOCK.GENCLKEN  |= (1 << 28);
+    /* 1. Calculate Jitter */
+    uint32_t jitter = trng_get_word() % 500000; 
+    uint32_t total_load = 4000000 + jitter; 
 
-    /* Step 2: Configure TIMG0 registers */
-    // The member is named CPRE for the Counter Prescaler
-    uint32_t jitter = trng_get_word() % 500000; //
-    uint32_t total_load = 4000000 + jitter;     //
-
-    TIMG0->COUNTERREGS.LOAD = total_load; 
-    TIMG0->COMMONREGS.CPRE  = 31; // Prescaler for 1MHz
+    /* Step 2: Reset and Enable TIMG0 Clock using Direct Addressing */
+    /* SYSCTL Base: 0x400AF000 */
+    /* GENSYSRST (Peripheral Reset Group 0) Offset: 0x00 */
+    /* GENSYSCLKEN (Peripheral Clock Group 0) Offset: 0x20 */
     
+    // Assert reset for TIMG0 (Bit 28)
+    *((volatile uint32_t *)(0x400AF000 + 0x00)) |= (1 << 28); 
+    
+    // Enable clock gate for TIMG0 (Bit 28)
+    *((volatile uint32_t *)(0x400AF000 + 0x20)) |= (1 << 28); 
+    
+    /* Step 3: Configure TIMG0 registers */
+    // Using 'CPS' as we verified earlier in your SDK check
+    TIMG0->COUNTERREGS.LOAD = total_load; 
+    TIMG0->COMMONREGS.CPS   = 31; // Prescaler for 1MHz
+    
+    /* 4. Start Timer and Interrupts */
     TIMG0->COMMONREGS.GCTL |= 0x1;
     TIMG0->CPU_INT.IMASK   |= (1 << 0);
     NVIC->ISER[0] |= (1 << TIMG0_INT_IRQn);
@@ -133,6 +139,4 @@ void timeout_start_4s(void) {
     while (!timeout_elapsed) {
         __WFI(); 
     }
-    
-    print_debug("Timeout complete\n");
 }

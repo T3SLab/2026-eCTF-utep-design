@@ -57,7 +57,7 @@ OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
 OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/sha.o
 OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha256.o
-OBJECTS += $(BUILDDIR)/rng.so \ $(BUILDDIR)/dl_trng.so
+OBJECTS += $(BUILDDIR)/rng.so $(BUILDDIR)/dl_trng.so
 
 endif
 
@@ -110,6 +110,10 @@ $(BUILDDIR)/$(NAME).elf: $(OBJECTS)
 
 $(BUILDDIR)/$(NAME).bin: $(BUILDDIR)/$(NAME).elf
 	@ $(OBJCOPY) -O binary $(BUILDDIR)/$(NAME).elf $(BUILDDIR)/$(NAME).bin
+
+$(BUILDDIR)/dl_trng.so: $(MSPM0_SDK_INSTALL_DIR)/source/ti/driverlib/dl_trng.c | $(BUILDDIR)
+	@ echo Building $@
+	@ $(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	@ echo Cleaning...
