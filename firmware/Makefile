@@ -25,6 +25,13 @@ OBJECTS = $(BUILDDIR)/HSM.so \
 
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so
+# Define the include path for wolfssl headers
+CFLAGS += -I./wolfssl
+
+# Add the specific wolfcrypt objects required for the design
+WOLFSSL_INC = wolfssl/wolfcrypt/src
+OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
+OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/cryptocb.o
 
 # change C flags
 CFLAGS += -DCRYPTO_EXAMPLE=1
@@ -50,6 +57,7 @@ OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
 OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/sha.o
 OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha256.o
+OBJECTS += $(BUILDDIR)/rng.so \ $(BUILDDIR)/dl_trng.so
 
 endif
 
@@ -65,7 +73,8 @@ CFLAGS += -I.. \
     -mcpu=cortex-m0plus \
     -march=thumbv6m \
     -mfloat-abi=soft \
-    -mthumb
+    -mthumb \
+    -Wno-\#warnings
 
 LFLAGS += "-l$(MSPM0_SDK_INSTALL_DIR)/source/ti/drivers/lib/ticlang/m0p/drivers_mspm0l122x_l222x.a" \
     "-l$(MSPM0_SDK_INSTALL_DIR)/kernel/nortos/lib/ticlang/m0p/nortos_mspm0l122x_l222x.a" \

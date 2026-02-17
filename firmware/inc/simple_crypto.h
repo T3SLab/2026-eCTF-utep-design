@@ -16,9 +16,9 @@
 #define ECTF_CRYPTO_H
 
 #include <stdint.h>
-#include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/sha256.h"
-#include "wolfssl/wolfcrypt/hmac.h"
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/wolfcrypt/hmac.h>
 
 /******************************** MACRO DEFINITIONS ********************************/
 #define BLOCK_SIZE AES_BLOCK_SIZE

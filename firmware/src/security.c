@@ -11,16 +11,18 @@
  * @copyright Copyright (c) 2026 The MITRE Corporation
  */
 #include "security.h"
+#include "rng.h"
 #include "host_messaging.h"
 #include "simple_crypto.h"
 #include <secrets.h>
-#include <wolfssl/wolfcrypt/rsa.h>
+#include <wolfssl/wolfcrypt/aes.h>
 #include <ti/devices/msp/msp.h>
+#include <wolfssl/wolfcrypt/rsa.h>
 
 extern const uint8_t HSMPIN_HMAC[32];
 
 /* Global flag used to signal when the 4-second timeout has elapsed */
-static volatile bool g_lockout_active = false;
+static volatile bool timeout_elapsed = false;
 
 bool check_pin(unsigned char* pin) {
     print_debug("Checking PIN\n");
@@ -55,14 +57,11 @@ bool verify_hsm_origin(uint8_t* signature, uint8_t* nonce) {
         return false;
     }
 
-    [cite_start]// 3. Verify the signature S1 against the random challenge C1 [cite: 80]
-    [cite_start]// This ensures the sender is a validly provisioned HSM [cite: 162]
     ret = wc_RsaSSL_Verify(nonce, 32, signature, 256, &pubKey);
 
     wc_FreeRsaKey(&pubKey);
 
     if (ret < 0) {
-        [cite_start]/* Requirement 3: Trigger 4s lockout on validation failure [cite: 110] */
         print_debug("RSA Verification Failed: Initiating 4s Penalty\n");
         timeout_start_4s(); 
         return false;
@@ -110,43 +109,30 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     return authorized;
 }
 
-// ============================================================================
-// TIMER-BASED SECURITY LOCKOUT IMPLEMENTATION
-// ============================================================================
-
 void timeout_start_4s(void) {
-    /* Visual Feedback: Turn Status LED ON */
-    GPIOB->DOUTSET = LEDS_STATUS_LED_PIN; 
+    print_debug("Initiating randomized security lockout\n");
+        
+    /* Step 1: Enable power and reset TIMG0 via SOCLOCK */
+    // The member is named GENSYSRST in this specific SDK version
+    SYSCTL->SOCLOCK.GENSYSRST |= (1 << 28); 
+    SYSCTL->SOCLOCK.GENCLKEN  |= (1 << 28);
 
-    /* Enable Power to TIMG0 via System Control */
-    SYSCTL->SOCLOCK.GENCLKEN0 |= (1 << 28); 
-    SYSCTL->SOCLOCK.GENSYSCLKEN0 |= (1 << 28);
+    /* Step 2: Configure TIMG0 registers */
+    // The member is named CPRE for the Counter Prescaler
+    uint32_t jitter = trng_get_word() % 500000; //
+    uint32_t total_load = 4000000 + jitter;     //
 
-    /* Configure TIMG0: 32MHz / 32 prescaler = 1MHz clock */
-    /* 4,000,000 counts = 4 seconds [cite: 42, 45, 155] */
-    TIMG0->COUNTERREGS.LOAD = 4000000;
-    TIMG0->COMMONREGS.CPRE = 31; 
-    TIMG0->COMMONREGS.CCFG = 0x1; // One-shot mode
-
-    /* Enable Interrupts and NVIC */
-    TIMG0->CPU_INT.IMASK |= 0x1;
-    NVIC_EnableIRQ(TIMG0_INT_IRQn);
-
-    /* Start the Timer */
-    TIMG0->COMMONREGS.CTL |= 0x1;
-
-    /* Requirement 2: Block all file actions during lockout [cite: 42, 110, 166] */
-    g_lockout_active = true;
-    while (g_lockout_active) {
+    TIMG0->COUNTERREGS.LOAD = total_load; 
+    TIMG0->COMMONREGS.CPRE  = 31; // Prescaler for 1MHz
+    
+    TIMG0->COMMONREGS.GCTL |= 0x1;
+    TIMG0->CPU_INT.IMASK   |= (1 << 0);
+    NVIC->ISER[0] |= (1 << TIMG0_INT_IRQn);
+    
+    timeout_elapsed = false;
+    while (!timeout_elapsed) {
         __WFI(); 
     }
-
-    /* Turn LED OFF */
-    GPIOB->DOUTCLR = LEDS_STATUS_LED_PIN; 
-}
-
-void TIMG0_IRQHandler(void) {
-    /* Clear TIMG0 interrupt and release lockout [cite: 56] */
-    TIMG0->CPU_INT.ICLR |= 0x1;
-    g_lockout_active = false;
+    
+    print_debug("Timeout complete\n");
 }

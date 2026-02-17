@@ -69,7 +69,7 @@ void crypto_example(void) {
     char output_buf[128] = {0};
 
     // Zero out the key
-    bzero(key, BLOCK_SIZE);
+    memset(key, 0, BLOCK_SIZE);
 
     // Encrypt example data and print out
     encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext);
