@@ -49,4 +49,11 @@ bool check_pin(unsigned char *pin);
 */
 bool validate_permission(uint16_t group_id, permission_enum_t perm);
 
+/** @brief Start a 4-second security lockout using TIMG0
+ *
+ *  Enables TIMG0 timer with a one-shot 4-second delay at 32MHz clock.
+ *  Blocks execution using WFI and global flag until timer interrupt occurs.
+*/
+void timeout_start_4s(void);
+
 #endif  // __SECURITY_H__
