@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 
 from loguru import logger
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 def gen_secrets(groups: list[int]) -> bytes:
@@ -32,14 +34,38 @@ def gen_secrets(groups: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
-    # TODO: Update this function to generate any system-wide secrets needed by
-    #   your design
+    # Generate 8 unique RSA key pairs for authentication 
+    hsm_devices = []
+
+    for i in range(8):
+        # 2048-bit keys for the mutual authentication handshake 
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        
+        # Export to DER format [cite: 135]
+        # Hex-encode binary data for JSON compatibility as per the NOTE below
+        priv_hex = private_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).hex()
+
+        pub_hex = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).hex()
+
+        hsm_devices.append({
+            "hsm_id": i,
+            "private_key": priv_hex,
+            "public_key": pub_hex
+        })
 
     # Create the secrets object
     # You can change this to generate any secret material
-    # The secrets file will never be shared with attackers
+    # The secrets file will never be shared with attackers [cite: 117]
     secrets = {
         "groups": groups,
+        "hsm_devices": hsm_devices, # Added RSA key material [cite: 124]
         "some_secrets": "EXAMPLE",
     }
 
