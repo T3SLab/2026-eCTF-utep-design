@@ -18,7 +18,6 @@
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
 static file_t current_file;
-
 /**********************************************************
  ******************** HELPER FUNCTIONS ********************
  **********************************************************/
@@ -41,7 +40,11 @@ void generate_list_files(list_response_t *file_list) {
 
             file_list->metadata[file_list->n_files].slot = i;
             file_list->metadata[file_list->n_files].group_id = temp_file.group_id;
-            strcpy(file_list->metadata[file_list->n_files].name, (char *)&temp_file.name);
+            size_t name_size = sizeof(file_list->metadata[file_list->n_files].name);
+            strncpy(file_list->metadata[file_list->n_files].name, 
+            (char *)&temp_file.name, name_size);
+            file_list->metadata[file_list->n_files].name[name_size - 1] = '\0';
+
             file_list->n_files++;
         }
     }
@@ -69,7 +72,7 @@ int list(uint16_t pkt_len, uint8_t *buf) {
     generate_list_files(&file_list);
 
     if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
+        print_error("Invalid pin,");
         return -1;
     }
 

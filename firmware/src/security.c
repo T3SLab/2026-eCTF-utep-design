@@ -14,8 +14,16 @@
 #include "host_messaging.h"
 #include "simple_crypto.h"
 #include <secrets.h>
+#include <ti/driverlib/dl_timerg.h>
 
 extern const uint8_t HSMPIN_HMAC[32];
+
+#define CPU_FREQ_HZ  32000000U  // SDK default CPU frequency 32MHz
+
+void delay_ms(uint32_t ms){
+    uint64_t total_cycles = (uint64_t)ms * (CPU_FREQ_HZ / 1000U);
+    delay_cycles((uint32_t)total_cycles);  // Safe for ms < 134s
+}
 
 bool check_pin(unsigned char* pin) {
     print_debug("Checking PIN\n");
