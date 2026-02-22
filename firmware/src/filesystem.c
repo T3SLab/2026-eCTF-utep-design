@@ -67,8 +67,8 @@ int create_file(
     dest->contents_len = contents_len;
 
     // name must be null terminated, and the contents are defined by a length
-    strcpy(dest->name, name);
-    //contents_len should be less than MAX_CONTENTS_SIZE, but no checking is done here. This is a potential vulnerability.
+    strncpy(dest->name, name, sizeof(dest->name));
+    dest->name[sizeof(dest->name) - 1] = '\0';
     memcpy(dest->contents, contents, contents_len);
 
     return 0;

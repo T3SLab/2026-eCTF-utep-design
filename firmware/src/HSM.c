@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "rng.h"
 #include "simple_flash.h"
 #include "host_messaging.h"
 #include "commands.h"
@@ -64,6 +65,7 @@ void crypto_example(void) {
     uint8_t key[KEY_SIZE];
     uint8_t hash_out[HASH_SIZE];
     uint8_t decrypted[BLOCK_SIZE];
+    uint8_t nonce [32];
 
     char output_buf[128] = {0};
 
@@ -85,7 +87,17 @@ void crypto_example(void) {
     // Decrypt the encrypted message and print out
     decrypt_sym(ciphertext, BLOCK_SIZE, key, decrypted);
     sprintf(output_buf, "Decrypted message: %s\n", decrypted);
+
     print_debug(output_buf);
+
+    generate_nonce(nonce, 32);
+    print_debug("Generated Nonce: \n");
+    print_hex_debug(nonce, 32);
+
+    print_debug("test delay start\n");
+    delay_ms(4000);
+    print_debug("test delay end\n");
+
 }
 #endif  //CRYPTO_EXAMPLE
 
@@ -99,6 +111,8 @@ void crypto_example(void) {
 void init() {
     // Initialize all of the hardware components
     SYSCFG_DL_init();
+
+    rng_init();
 
     init_fs();
 }
