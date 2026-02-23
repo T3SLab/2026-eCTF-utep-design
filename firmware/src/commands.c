@@ -15,6 +15,11 @@
 #include "commands.h"
 #include "filesystem.h"
 
+#define NONCE_SIZE 12
+#define TAG_SIZE 16
+#define CRYPTO_OVERHEAD (NONCE_SIZE + TAG_SIZE)
+#define MAX_PLAINTEXT_SIZE (MAX_CONTENTS_SIZE - CRYPTO_OVERHEAD)
+
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
 static file_t current_file;
