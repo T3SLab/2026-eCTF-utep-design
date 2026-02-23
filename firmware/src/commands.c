@@ -14,6 +14,12 @@
 #include "host_messaging.h"
 #include "commands.h"
 #include "filesystem.h"
+#include "rng.c"
+
+#define NONCE_SIZE 12
+#define TAG_SIZE 16
+#define CRYPTO_OVERHEAD (NONCE_SIZE + TAG_SIZE)
+#define MAX_PLAINTEXT_SIZE (MAX_CONTENTS_SIZE - CRYPTO_OVERHEAD)
 
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
@@ -45,6 +51,15 @@ void generate_list_files(list_response_t *file_list) {
             file_list->n_files++;
         }
     }
+}
+
+/** @brief Load AES key from secrets file 
+ * @param aes_key A pointer to a buffer where the AES key will be stored
+ * @return 0 on success, non-zero on error
+ * 
+*/
+int get_global_aes_key(uint8_t *aes_key) {
+
 }
 
 
@@ -91,6 +106,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     read_command_t *command = (read_command_t*)buf;
     read_response_t file_info;
     file_t curr_file;
+    uint8_t aes_key[32]; //load AES key from secrets file
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -104,18 +120,43 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         print_error("Failed to read file");
         return -1;
     }
-    // copy structure of the persistent file
-    memcpy(file_info.name, &curr_file.name, strlen(curr_file.name));
-    memcpy(file_info.contents, &curr_file.contents, curr_file.contents_len);
 
     if (!validate_permission(curr_file.group_id, PERM_READ)) {
         print_error("Invalid permission");
         return -1;
     }
 
-    // write a success message with the file information
-    pkt_len_t length = MAX_NAME_SIZE + curr_file.contents_len;
+    // ensure file is large enough to contain nonce and tag
+    if (curr_file.contents_len < CRYPTO_OVERHEAD) {
+        print_error("File corrupted");
+        return -1;
+    }
+
+    // Load AES key from secrets
+    get_global_aes_key(aes_key);
+
+    // Extract nonce, tag, and ciphertext from file contents
+    uint8_t *nonce = curr_file.contents;
+    uint8_t *tag = curr_file.contents + NONCE_SIZE;
+    uint8_t *ciphertext = curr_file.contents + CRYPTO_OVERHEAD;
+    size_t cipher_len = curr_file.contents_len - CRYPTO_OVERHEAD;
+
+    uint8_t plaintext[MAX_PLAINTEXT_SIZE];
+
+    // Decrypt the file contents
+    if (decrypt_sym(ciphertext, cipher_len, aes_key, nonce, tag, plaintext) != 0) {
+        print_error("Decryption failed");
+        return -1;
+    }
+
+    // Copy decrypted data to response
+    memcpy(file_info.name, curr_file.name, MAX_NAME_SIZE);
+    memcpy(file_info.contents, plaintext, cipher_len);
+
+    // Write packet to control interface
+    pkt_len_t length = MAX_NAME_SIZE + cipher_len;
     write_packet(CONTROL_INTERFACE, READ_MSG, &file_info, length);
+
     return 0;
 }
 
@@ -131,6 +172,7 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     write_command_t *command = (write_command_t*)buf;
     int ret;
     file_t curr_file;
+    uint8_t aes_key[32]; // AES-256 key size loaded from secrets
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -141,14 +183,46 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         print_error("Invalid permission");
         return -1;
     }
+    //ensure file fits after adding nonce and tag
+    if (command->contents_len > MAX_PLAINTEXT_SIZE) {
+        print_error("File too large.");
+        return -1;
+    }
 
+    //load AES key from secrets
+    get_global_aes_key(aes_key);
+
+    uint8_t nonce[NONCE_SIZE];
+    uint8_t tag[TAG_SIZE];
+    uint8_t ciphertext[MAX_PLAINTEXT_SIZE];
+
+    //generate unique nonce
+    generate_nonce(nonce, NONCE_SIZE);
+
+    // encrypt plaintext
+    if (encrypt_sym( command->contents, command->contents_len,
+            aes_key,        //loaded from secrets
+            nonce,
+            ciphertext,
+            tag) != 0) {
+
+        print_error("Encryption failed");
+        return -1;
+    }
+
+    //create file structure
     create_file(
         &curr_file,
         command->group_id,
         command->name,
-        command->contents_len,
-        command->contents
+        command->contents_len + CRYPTO_OVERHEAD,
+        NULL  
     );
+
+    //store nonce, tag, and ciphertext in file contents
+    memcpy(curr_file.contents, nonce, NONCE_SIZE);
+    memcpy(curr_file.contents + NONCE_SIZE, tag, TAG_SIZE);
+    memcpy(curr_file.contents + CRYPTO_OVERHEAD, ciphertext, command->contents_len);
 
     // Store the file persistently
     if (write_file(command->slot, &curr_file, command->uuid) < 0) {
