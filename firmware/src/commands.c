@@ -15,6 +15,9 @@
 #include "commands.h"
 #include "filesystem.h"
 #include "rng.c"
+#include "secrets.h"
+#include "simple_crypto.h"
+#include <string.h>
 
 #define NONCE_SIZE 12
 #define TAG_SIZE 16
@@ -51,15 +54,6 @@ void generate_list_files(list_response_t *file_list) {
             file_list->n_files++;
         }
     }
-}
-
-/** @brief Load AES key from secrets file 
- * @param aes_key A pointer to a buffer where the AES key will be stored
- * @return 0 on success, non-zero on error
- * 
-*/
-int get_global_aes_key(uint8_t *aes_key) {
-
 }
 
 
@@ -106,7 +100,6 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     read_command_t *command = (read_command_t*)buf;
     read_response_t file_info;
     file_t curr_file;
-    uint8_t aes_key[32]; //load AES key from secrets file
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -132,8 +125,6 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // Load AES key from secrets
-    get_global_aes_key(aes_key);
 
     // Extract nonce, tag, and ciphertext from file contents
     uint8_t *nonce = curr_file.contents;
@@ -144,7 +135,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     uint8_t plaintext[MAX_PLAINTEXT_SIZE];
 
     // Decrypt the file contents
-    if (decrypt_sym(ciphertext, cipher_len, aes_key, nonce, tag, plaintext) != 0) {
+    if (decrypt_sym(ciphertext, cipher_len, AES_KEY, nonce, tag, plaintext) != 0) {
         print_error("Decryption failed");
         return -1;
     }
@@ -172,7 +163,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     write_command_t *command = (write_command_t*)buf;
     int ret;
     file_t curr_file;
-    uint8_t aes_key[32]; // AES-256 key size loaded from secrets
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -189,9 +179,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    //load AES key from secrets
-    get_global_aes_key(aes_key);
-
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
     uint8_t ciphertext[MAX_PLAINTEXT_SIZE];
@@ -200,11 +187,7 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     generate_nonce(nonce, NONCE_SIZE);
 
     // encrypt plaintext
-    if (encrypt_sym( command->contents, command->contents_len,
-            aes_key,        //loaded from secrets
-            nonce,
-            ciphertext,
-            tag) != 0) {
+    if (encrypt_sym( command->contents, command->contents_len, AES_KEY, nonce, ciphertext, tag) != 0) {
 
         print_error("Encryption failed");
         return -1;
