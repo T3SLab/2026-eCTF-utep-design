@@ -40,10 +40,8 @@ void generate_list_files(list_response_t *file_list) {
 
             file_list->metadata[file_list->n_files].slot = i;
             file_list->metadata[file_list->n_files].group_id = temp_file.group_id;
-            size_t name_size = sizeof(file_list->metadata[file_list->n_files].name);
-            strncpy(file_list->metadata[file_list->n_files].name, 
-            (char *)&temp_file.name, name_size);
-            file_list->metadata[file_list->n_files].name[name_size - 1] = '\0';
+            strncpy(file_list->metadata[file_list->n_files].name, (char *)&temp_file.name, 32);
+            file_list->metadata[file_list->n_files].name[31] = '\0';
 
             file_list->n_files++;
         }

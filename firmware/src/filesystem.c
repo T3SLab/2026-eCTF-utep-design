@@ -67,8 +67,8 @@ int create_file(
     dest->contents_len = contents_len;
 
     // name must be null terminated, and the contents are defined by a length
-    strncpy(dest->name, name, sizeof(dest->name));
-    dest->name[sizeof(dest->name) - 1] = '\0';
+    strncpy(dest->name, name, 32);
+    dest->name[31] = '\0';
     memcpy(dest->contents, contents, contents_len);
 
     return 0;
