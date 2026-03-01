@@ -67,6 +67,11 @@ int create_file(
 
     // name must be null terminated, and the contents are defined by a length
     strcpy(dest->name, name);
+
+    //only copy the contents if the pointer is not null
+    if (contents != NULL && contents_len > 0) {
+        memcpy(dest->contents, contents, contents_len);
+    }
     memcpy(dest->contents, contents, contents_len);
 
     return 0;
