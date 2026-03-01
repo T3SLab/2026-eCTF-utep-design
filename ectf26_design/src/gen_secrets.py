@@ -13,7 +13,7 @@ Copyright: Copyright (c) 2026 The MITRE Corporation
 import argparse
 import json
 from pathlib import Path
-import secrets
+import secrets as secrets_module
 
 from loguru import logger
 from cryptography.hazmat.primitives import serialization
@@ -61,14 +61,14 @@ def gen_secrets(groups: list[int]) -> bytes:
             "public_key": pub_hex
         })
 
-    aes_key_hex = secrets.token_bytes(32).hex()  # 256-bit AES key for encrypting secrets
+    aes_key_hex = secrets_module.token_bytes(32).hex()  # 256-bit AES key for encrypting secrets
     # Create the secrets object
     # You can change this to generate any secret material
     # The secrets file will never be shared with attackers [cite: 117]
     secrets = {
         "groups": groups,
         "hsm_devices": hsm_devices, # Added RSA key material [cite: 124]
-        "aes_key": aes_key_hex, # Added AES key for encrypting secrets
+        "aes_key": aes_key_hex, # Added AES key
         "some_secrets": "EXAMPLE",
     }
 
