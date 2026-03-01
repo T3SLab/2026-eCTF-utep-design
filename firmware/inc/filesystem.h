@@ -37,6 +37,8 @@ typedef uint16_t group_id_t;
 #define MAX_FILE_COUNT 8
 #define MAX_NAME_SIZE 32
 #define MAX_CONTENTS_SIZE 8192
+#define NONCE_SIZE 12
+#define TAG_SIZE 16
 
 // _FLASH_FAT_START is defined by the functional specs to be the start of where the FAT
 // will be stored. It is address 0x0003a000, the last flash page. Your team may NOT
@@ -78,7 +80,7 @@ The reference design allocates files for each slot as follows:
 #define FILE_START_PAGE_FROM_SLOT(slot) FILES_START_ADDR + (STORED_FILE_SIZE*slot)
 
 // Calculate the total size of a file in flash, including its metadata
-#define FILE_TOTAL_SIZE(len) len + offsetof(file_t, contents)
+#define FILE_TOTAL_SIZE(len) len + offsetof(file_t, contents) + NONCE_SIZE + TAG_SIZE
 
 // Each file will be 9 pages in size. 8 pages for the file contents + 1 page for
 // metadata
@@ -96,6 +98,8 @@ typedef struct {
     char name[MAX_NAME_SIZE];
     uint16_t contents_len;
     uint8_t contents[MAX_CONTENTS_SIZE];
+    uint8_t nonce[NONCE_SIZE];
+    uint8_t tag[TAG_SIZE];
 } file_t;
 
 /** @brief Initialize the filesystem
