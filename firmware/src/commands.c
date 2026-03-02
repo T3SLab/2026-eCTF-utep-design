@@ -14,6 +14,9 @@
 #include "host_messaging.h"
 #include "commands.h"
 #include "filesystem.h"
+#include "rng.h"
+#include "simple_crypto.h"
+#include "simple_uart.h" 
 
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
@@ -222,36 +225,39 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
  *
  * @return 0 upon success. A negative value on error.
  */
+/** @brief Perform the interrogate operation (Requester/Board A) */
 int interrogate(uint16_t pkt_len, uint8_t *buf) {
     interrogate_command_t *command = (interrogate_command_t*)buf;
+    uint8_t nonce[32];
+    uint8_t proof[260]; // 4 bytes ID + 256 bytes Sig
     msg_type_t cmd;
-    list_response_t final_list_buf;
-    uint16_t len_recv_msg;
+    uint16_t len = 260;
 
-    // pin check
-    if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
+    if (!check_pin(command->pin)) return -1;
+
+    // 1. Send Challenge
+    generate_nonce(nonce, 32);
+    write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, nonce, 32);
+
+    // 2. Receive Proof
+    if (read_packet(TRANSFER_INTERFACE, &cmd, proof, &len) != MSG_OK) {
+        print_error("UART Timeout");
         return -1;
     }
 
-    // request the file list from the neighboring device
-    write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, NULL, 0);
+    uint32_t peer_id = *(uint32_t*)proof;
+    uint8_t *sig = proof + 4;
 
-    // set essentially no limit to the receive message size
-    len_recv_msg = 0xffff;
-
-    // recieve the response message
-    read_packet(TRANSFER_INTERFACE, &cmd, &final_list_buf, &len_recv_msg);
-    if (cmd != INTERROGATE_MSG) {
-        print_error("Opcode mismatch");
+    // 3. Verify Identity
+    if (verify_signature(nonce, sig, peer_id) == 0) {
+        print_debug("HSM Verified Successfully!");
+        // Now proceed to original list-files logic...
+    } else {
+        print_error("AUTHENTICATION_FAILED");
         return -1;
     }
-
-    // return the final list to the user
-    write_packet(CONTROL_INTERFACE, INTERROGATE_MSG, &final_list_buf, len_recv_msg);
     return 0;
 }
-
 
 /** @brief Perform the listen operation
  *
@@ -273,23 +279,22 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
     read_packet(TRANSFER_INTERFACE, &cmd, uart_buf, &read_length);
 
     switch (cmd) {
-        case INTERROGATE_MSG:
-            // zeroize the buffers we will use
-            memset(&file_list, 0, sizeof(file_list));
+    case INTERROGATE_MSG:
+        uint8_t signature[256];
+        uint8_t response[260];
+        uint32_t my_id = MY_HSM_ID;
 
-            // generate a list of files for the other device
-            generate_list_files(&file_list);
+        // uart_buf contains the 32-byte nonce from Board A
+        if (sign_nonce(uart_buf, signature) == 0) {
+            memcpy(response, &my_id, 4);
+            memcpy(response + 4, signature, 256);
+            write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, response, 260);
+            
+        }
 
-            // TODO: the reference design does not implement *ANY* security
-            // you will want to add something here to comply with SR1
-
-            // send the list of files on this device
-            write_length = LIST_PKT_LEN(file_list.n_files);
-            write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, &file_list, write_length);
-            break;
-        case RECEIVE_MSG:
-            // get the request
-            command = (receive_request_t *)uart_buf;
+    case RECEIVE_MSG:
+        // get the request
+        command = (receive_request_t *)uart_buf;
 
             // TODO: the reference design does not implement *ANY* security
             // you will want to add something here to comply with SR1

@@ -39,11 +39,11 @@
 MEMORY
 {
     /* Divide this in half and allocate the first half to user space and the second reserved */
-    BOOTLOADER      (RX)  : origin = 0x00000000, length = 0x00006000 /* Bootloader flash */
-    FLASH           (RX)  : origin = 0x00006000, length = 0x00034000 /* Location of team firmware */
-    FAT             (RW)  : origin = 0x0003A000, length = 0x00000400 /* Used to store tag, length, pointer values for files */
-    APP2            (RX)  : origin = 0x0003A400, length = 0x00005c00 /* Location of team firmware */
-    SRAM            (RWX) : origin = 0x20200000, length = 0x00008000
+    BOOTLOADER      (RX)  : origin = 0x00000000, length = 0x00006000 
+    FLASH           (RX)  : origin = 0x00006000, length = 0x00050000 
+    FAT             (RW)  : origin = 0x00070000, length = 0x00001000 
+    APP2            (RX)  : origin = 0x00071000, length = 0x00005000 
+    SRAM            (RWX) : origin = 0x20000000, length = 0x00008000
     BCR_CONFIG      (R)   : origin = 0x41C00000, length = 0x000000FF
     BSL_CONFIG      (R)   : origin = 0x41C00100, length = 0x00000080
 }
