@@ -107,6 +107,7 @@ def secrets_to_c_header(
         f.write("#ifndef __SECRETS_H__\n")
         f.write("#define __SECRETS_H__\n\n")
         f.write('#include "security.h"\n\n')
+        f.write(f"#define MY_HSM_ID {HSM_ID}\n\n")
         
         # Write individual Private Key [cite: 78, 81]
         f.write(f"// RSA Private Key for HSM {HSM_ID}\n")

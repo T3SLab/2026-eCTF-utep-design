@@ -51,6 +51,11 @@ OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
 OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/sha.o
 OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha256.o
+OBJECTS += $(WOLFSSL_INC)/rsa.o
+OBJECTS += $(WOLFSSL_INC)/random.o
+OBJECTS += $(WOLFSSL_INC)/sp_int.o
+OBJECTS += $(WOLFSSL_INC)/asn.o
+OBJECTS += $(WOLFSSL_INC)/memory.o
 
 endif
 

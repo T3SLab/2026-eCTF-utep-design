@@ -19,6 +19,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 
 /******************************** MACRO DEFINITIONS ********************************/
 #define BLOCK_SIZE AES_BLOCK_SIZE
@@ -79,6 +80,14 @@ int hash(void *data, size_t len, uint8_t *hash_out);
  */
 int hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
     uint8_t *mac_out);
+
+/** @brief Signs a 32-byte nonce using the board's private key
+ * @return 0 on success, negative on error */
+int sign_nonce(const uint8_t *nonce, uint8_t *sig_out);
+
+/** @brief Verifies a signature using a specific public key from the table
+ * @return 0 on success, negative on error */
+int verify_signature(const uint8_t *nonce, const uint8_t *sig, uint32_t signer_id);
 
 
 #endif // CRYPTO_EXAMPLE

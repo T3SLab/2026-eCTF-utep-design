@@ -15,6 +15,8 @@
 
 #include "simple_crypto.h"
 #include "security.h"
+#include "secrets.h"
+#include "wolfssl/wolfcrypt/rsa.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -131,4 +133,45 @@ int hmac_sha256(const uint8_t *key, size_t key_len,const uint8_t *data, size_t d
     return ret;
 }
 
+int sign_nonce(const uint8_t *nonce, uint8_t *sig_out) {
+    RsaKey key;
+    WC_RNG rng;
+    word32 idx = 0;
+    int ret;
+
+    wc_InitRsaKey(&key, NULL);
+    wc_InitRng(&rng);
+
+    // Decode our private key from secrets.h
+    ret = wc_RsaPrivateKeyDecode(RSA_PRIV_KEY, &idx, &key, sizeof(RSA_PRIV_KEY));
+    if (ret != 0) return ret;
+
+    // Sign the 32-byte nonce
+    ret = wc_RsaSSL_Sign(nonce, 32, sig_out, 256, &key, &rng);
+
+    wc_FreeRsaKey(&key);
+    wc_FreeRng(&rng);
+    return ret;
+}
+
+int verify_signature(const uint8_t *nonce, const uint8_t *sig, uint32_t signer_id) {
+    RsaKey key;
+    word32 idx = 0;
+    int ret;
+
+    if (signer_id >= 8) return -1; // Out of bounds
+
+    wc_InitRsaKey(&key, NULL);
+
+    // Decode the Peer's public key from our Trust Table
+    ret = wc_RsaPublicKeyDecode(RSA_PUB_KEYS[signer_id], &idx, &key, 294);
+    if (ret != 0) return ret;
+
+    // Verify the signature against the original nonce
+    // Returns the length of the signed data on success
+    ret = wc_RsaSSL_Verify(sig, 256, (uint8_t*)nonce, 256, &key);
+
+    wc_FreeRsaKey(&key);
+    return (ret == 32) ? 0 : -1; // We expect 32 bytes back (the nonce)
+}
 #endif
