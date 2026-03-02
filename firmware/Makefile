@@ -30,6 +30,7 @@ OBJECTS += $(BUILDDIR)/simple_crypto.so
 CFLAGS += -DCRYPTO_EXAMPLE=1
 CFLAGS += -DNO_WOLFSSL_DIR
 CFLAGS += -DWOLFSSL_AES_DIRECT
+CFLAGS += -DHAVE_AESGCM
 CFLAGS += -DSINGLE_THREADED
 # From https://www.wolfssl.com/documentation/manuals/wolfssl/chapter02.html#building-with-gcc-arm
 CFLAGS += -DHAVE_PK_CALLBACKS
@@ -42,7 +43,7 @@ CFLAGS += -DNO_DEV_RANDOM
 CFLAGS += -DWC_NO_DEFAULT_DEVID
 CFLAGS += -DWOLF_CRYPTO_CB
 
-WOLFSSL_INC = wolfssl/wolfcrypt/src
+WOLFSSL_INC = ./wolfssl/wolfcrypt/src
 CFLAGS += -I./wolfssl
 
 # we need to build these objects for the simple crypto example
@@ -50,7 +51,6 @@ OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
 OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/sha.o
 OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha256.o
-
 endif
 
 NAME = hsm
