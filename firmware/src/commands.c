@@ -14,6 +14,12 @@
 #include "host_messaging.h"
 #include "commands.h"
 #include "filesystem.h"
+#include "rng.c"
+#include "secrets.h"
+#include "simple_crypto.h"
+#include <string.h>
+
+
 
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
@@ -89,6 +95,11 @@ int list(uint16_t pkt_len, uint8_t *buf) {
  * @return 0 upon success. A negative value on error.
 */
 int read(uint16_t pkt_len, uint8_t *buf) {
+    // ensure packet is large enough to contain the command
+    if (pkt_len < sizeof(read_command_t)) {
+        print_error("Packet too short");
+        return -1;
+    }
     read_command_t *command = (read_command_t*)buf;
     read_response_t file_info;
     file_t curr_file;
@@ -101,22 +112,39 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     // zeroizing memory is a pretty good practice
     memset(&file_info, 0, sizeof(read_response_t));
 
+    //Read a file from persistent storage into memory
     if (read_file(command->slot, &curr_file) < 0) {
         print_error("Failed to read file");
         return -1;
     }
-    // copy structure of the persistent file
-    memcpy(file_info.name, &curr_file.name, strlen(curr_file.name));
-    memcpy(file_info.contents, &curr_file.contents, curr_file.contents_len);
 
     if (!validate_permission(curr_file.group_id, PERM_READ)) {
         print_error("Invalid permission");
         return -1;
     }
 
-    // write a success message with the file information
-    pkt_len_t length = MAX_NAME_SIZE + curr_file.contents_len;
+    // Extract nonce, tag, and ciphertext from file
+    uint8_t *nonce = curr_file.nonce;
+    uint8_t *tag = curr_file.tag;
+    uint8_t *ciphertext = curr_file.contents;
+    size_t cipher_len = curr_file.contents_len;
+
+    uint8_t plaintext[MAX_CONTENTS_SIZE];
+
+    // Decrypt the file contents
+    if (decrypt_sym(ciphertext, cipher_len, AES_KEY, nonce, plaintext, tag) != 0) {
+        print_error("Decryption failed");
+        return -1;
+    }
+
+    // Copy decrypted data to response
+    memcpy(file_info.name, curr_file.name, MAX_NAME_SIZE);
+    memcpy(file_info.contents, plaintext, cipher_len);
+
+    //write a success message with the file information
+    pkt_len_t length = MAX_NAME_SIZE + cipher_len;
     write_packet(CONTROL_INTERFACE, READ_MSG, &file_info, length);
+
     return 0;
 }
 
@@ -129,8 +157,13 @@ int read(uint16_t pkt_len, uint8_t *buf) {
  * @return 0 upon success. A negative value on error.
 */
 int write(uint16_t pkt_len, uint8_t *buf) {
+    // ensure packet is large enough to contain the command
+    if (pkt_len < sizeof(write_command_t)) {
+        print_error("Packet too short");
+        return -1;
+    }
+    
     write_command_t *command = (write_command_t*)buf;
-    int ret;
     file_t curr_file;
 
     if (!check_pin(command->pin)) {
@@ -143,13 +176,38 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
+    if (command->contents_len > MAX_CONTENTS_SIZE) {
+        print_error("File too large");
+        return -1;
+    }
+
+    uint8_t nonce[NONCE_SIZE];
+    uint8_t tag[TAG_SIZE];
+    uint8_t ciphertext[MAX_CONTENTS_SIZE];
+
+    //generate unique nonce
+    generate_nonce(nonce, NONCE_SIZE);
+
+    // encrypt plaintext
+    if (encrypt_sym( command->contents, command->contents_len, AES_KEY, nonce, ciphertext, tag) != 0) {
+        print_error("Encryption failed");
+        return -1;
+    }
+
+    //create file structure without contents
     create_file(
         &curr_file,
         command->group_id,
         command->name,
         command->contents_len,
-        command->contents
+        NULL  
     );
+
+    //store nonce, tag, and ciphertext in file contents
+    memcpy(curr_file.contents, ciphertext, command->contents_len);
+    memcpy(curr_file.nonce, nonce, NONCE_SIZE);
+    memcpy(curr_file.tag, tag, TAG_SIZE);
+
 
     // Store the file persistently
     if (write_file(command->slot, &curr_file, command->uuid) < 0) {

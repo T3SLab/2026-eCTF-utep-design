@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "rng.h"
 #include "simple_flash.h"
 #include "host_messaging.h"
 #include "commands.h"
@@ -64,14 +65,21 @@ void crypto_example(void) {
     uint8_t key[KEY_SIZE];
     uint8_t hash_out[HASH_SIZE];
     uint8_t decrypted[BLOCK_SIZE];
+    uint8_t nonce[GCM_NONCE_SIZE];
+    uint8_t auth_tag[GCM_TAG_SIZE];
 
     char output_buf[128] = {0};
 
     // Zero out the key
-    bzero(key, BLOCK_SIZE);
+    bzero(key, KEY_SIZE);
+
+    // Generate nonce before encryption (must be unique per encryption)
+    generate_nonce(nonce, GCM_NONCE_SIZE);
+    print_debug("Generated Nonce: \n");
+    print_hex_debug(nonce, GCM_NONCE_SIZE);
 
     // Encrypt example data and print out
-    encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext);
+    encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, nonce, ciphertext, auth_tag);
     print_debug("Encrypted data: \n");
     print_hex_debug(ciphertext, BLOCK_SIZE);
 
@@ -83,7 +91,7 @@ void crypto_example(void) {
     print_hex_debug(hash_out, HASH_SIZE);
 
     // Decrypt the encrypted message and print out
-    decrypt_sym(ciphertext, BLOCK_SIZE, key, decrypted);
+    decrypt_sym(ciphertext, BLOCK_SIZE, key, nonce, decrypted, auth_tag);
     sprintf(output_buf, "Decrypted message: %s\n", decrypted);
     print_debug(output_buf);
 }

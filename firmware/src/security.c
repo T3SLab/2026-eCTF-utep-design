@@ -30,7 +30,6 @@ bool check_pin(unsigned char* pin) {
         return memcmp(mac_out, HSMPIN_HMAC, 32) == 0;
     }
 }
-
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     char output_buf[128] = {0};
 
@@ -57,3 +56,5 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     }
     return false;
 }
+
+
