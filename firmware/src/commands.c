@@ -33,7 +33,7 @@ static file_t current_file;
  */
 void generate_list_files(list_response_t *file_list) {
     file_list->n_files = 0;
-    file_t temp_file;
+    static file_t temp_file;
 
     // Loop through all files on the system
     for (uint8_t i = 0; i < MAX_FILE_COUNT; i++) {
@@ -65,7 +65,7 @@ void generate_list_files(list_response_t *file_list) {
 */
 int list(uint16_t pkt_len, uint8_t *buf) {
     list_command_t *command = (list_command_t*)buf;
-    list_response_t file_list;
+    static list_response_t file_list;
 
     memset(&file_list, 0, sizeof(file_list));
 
@@ -94,7 +94,7 @@ int list(uint16_t pkt_len, uint8_t *buf) {
 int read(uint16_t pkt_len, uint8_t *buf) {
     read_command_t *command = (read_command_t*)buf;
     read_response_t file_info;
-    file_t curr_file;
+    static file_t curr_file;
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -134,7 +134,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
 int write(uint16_t pkt_len, uint8_t *buf) {
     write_command_t *command = (write_command_t*)buf;
     int ret;
-    file_t curr_file;
+    static file_t curr_file;
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");

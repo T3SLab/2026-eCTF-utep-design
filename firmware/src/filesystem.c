@@ -42,7 +42,7 @@ int init_fs() {
  * @return True if the slot is in use. False otherwise.
 */
 bool is_slot_in_use(slot_t slot) {
-    file_t temp_file;
+    static file_t temp_file;
     return (!read_file(slot, &temp_file) && temp_file.in_use == FILE_IN_USE);
 }
 
