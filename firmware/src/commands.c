@@ -23,7 +23,13 @@
 
 /* IMPORTANT COMPONENTS FROM HSM.c */
 // extern file_t hsm_status[MAX_FILE_COUNT];
-static file_t current_file;
+static union {
+    file_t file;
+    read_response_t resp;
+} shared_buffer;
+
+#define current_file (shared_buffer.file)
+#define global_file_info (shared_buffer.resp)
 
 /**********************************************************
  ******************** HELPER FUNCTIONS ********************
@@ -37,7 +43,7 @@ static file_t current_file;
  */
 void generate_list_files(list_response_t *file_list) {
     file_list->n_files = 0;
-    file_t temp_file;
+    static file_t temp_file;
 
     // Loop through all files on the system
     for (uint8_t i = 0; i < MAX_FILE_COUNT; i++) {
@@ -95,55 +101,49 @@ int list(uint16_t pkt_len, uint8_t *buf) {
  * @return 0 upon success. A negative value on error.
 */
 int read(uint16_t pkt_len, uint8_t *buf) {
-    // ensure packet is large enough to contain the command
     if (pkt_len < sizeof(read_command_t)) {
         print_error("Packet too short");
         return -1;
     }
+    
+    // 1. Extract what we need from the incoming command
     read_command_t *command = (read_command_t*)buf;
-    read_response_t file_info;
-    file_t curr_file;
-
+    uint16_t target_slot = command->slot; // Save this before we overwrite buf!
+    
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
         return -1;
     }
 
-    // zeroizing memory is a pretty good practice
-    memset(&file_info, 0, sizeof(read_response_t));
-
-    //Read a file from persistent storage into memory
-    if (read_file(command->slot, &curr_file) < 0) {
+    // 2. Read the encrypted file from flash into the global current_file
+    if (read_file(target_slot, &current_file) < 0) {
         print_error("Failed to read file");
         return -1;
     }
 
-    if (!validate_permission(curr_file.group_id, PERM_READ)) {
+    if (!validate_permission(current_file.group_id, PERM_READ)) {
         print_error("Invalid permission");
         return -1;
     }
 
-    // Extract nonce, tag, and ciphertext from file
-    uint8_t *nonce = curr_file.nonce;
-    uint8_t *tag = curr_file.tag;
-    uint8_t *ciphertext = curr_file.contents;
-    size_t cipher_len = curr_file.contents_len;
+    // 3. REPURPOSE THE UART BUFFER!
+    // Cast the incoming 'buf' to our response type and clear it
+    read_response_t *resp = (read_response_t*)buf;
+    memset(resp, 0, sizeof(read_response_t));
 
-    uint8_t plaintext[MAX_CONTENTS_SIZE];
-
-    // Decrypt the file contents
-    if (decrypt_sym(ciphertext, cipher_len, AES_KEY, nonce, plaintext, tag) != 0) {
+    // 4. Decrypt from current_file into the freshly cleared UART buffer
+    if (decrypt_sym(current_file.contents, current_file.contents_len, 
+                    AES_KEY, current_file.nonce, resp->contents, current_file.tag) != 0) {
         print_error("Decryption failed");
         return -1;
     }
 
-    // Copy decrypted data to response
-    memcpy(file_info.name, curr_file.name, MAX_NAME_SIZE);
-    memcpy(file_info.contents, plaintext, cipher_len);
+    // Copy the name into the response
+    memcpy(resp->name, current_file.name, MAX_NAME_SIZE);
 
-    //write a success message with the file information
-    pkt_len_t length = MAX_NAME_SIZE + cipher_len;
-    write_packet(CONTROL_INTERFACE, READ_MSG, &file_info, length);
+    // Write the packet back to the host
+    pkt_len_t length = MAX_NAME_SIZE + current_file.contents_len;
+    write_packet(CONTROL_INTERFACE, READ_MSG, resp, length);
 
     return 0;
 }
@@ -157,14 +157,14 @@ int read(uint16_t pkt_len, uint8_t *buf) {
  * @return 0 upon success. A negative value on error.
 */
 int write(uint16_t pkt_len, uint8_t *buf) {
-    // ensure packet is large enough to contain the command
-    if (pkt_len < sizeof(write_command_t)) {
+    size_t min_expected_len = sizeof(write_command_t) - MAX_CONTENTS_SIZE;
+
+    if (pkt_len < min_expected_len) {
         print_error("Packet too short");
         return -1;
     }
     
     write_command_t *command = (write_command_t*)buf;
-    file_t curr_file;
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
@@ -181,41 +181,41 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    uint8_t nonce[NONCE_SIZE];
-    uint8_t tag[TAG_SIZE];
-    uint8_t ciphertext[MAX_CONTENTS_SIZE];
-
-    //generate unique nonce
-    generate_nonce(nonce, NONCE_SIZE);
-
-    // encrypt plaintext
-    if (encrypt_sym( command->contents, command->contents_len, AES_KEY, nonce, ciphertext, tag) != 0) {
-        print_error("Encryption failed");
-        return -1;
-    }
-
-    //create file structure without contents
+    // 1. Initialize metadata in the shared buffer FIRST
+    // This safely zeros out the structure without destroying our ciphertext.
     create_file(
-        &curr_file,
+        &current_file,
         command->group_id,
         command->name,
         command->contents_len,
         NULL  
     );
 
-    //store nonce, tag, and ciphertext in file contents
-    memcpy(curr_file.contents, ciphertext, command->contents_len);
-    memcpy(curr_file.nonce, nonce, NONCE_SIZE);
-    memcpy(curr_file.tag, tag, TAG_SIZE);
+    // 2. Generate unique nonce
+    uint8_t nonce[NONCE_SIZE];
+    uint8_t tag[TAG_SIZE];
+    generate_nonce(nonce, NONCE_SIZE);
 
+    // 3. Encrypt directly into the now-prepared SHARED global buffer
+    if (encrypt_sym(command->contents, command->contents_len, AES_KEY, nonce, 
+                    current_file.contents, tag) != 0) {
+        print_error("Encryption failed");
+        return -1;
+    }
 
-    // Store the file persistently
-    if (write_file(command->slot, &curr_file, command->uuid) < 0) {
+    print_debug("Raw Ciphertext going into Flash:\n");
+    print_hex_debug(current_file.contents, command->contents_len);
+
+    // 4. Store the crypto metadata
+    memcpy(current_file.nonce, nonce, NONCE_SIZE);
+    memcpy(current_file.tag, tag, TAG_SIZE);
+
+    // 5. Write to flash
+    if (write_file(command->slot, &current_file, command->uuid) < 0) {
         print_error("Error storing file");
         return -1;
     }
 
-    // Success message with an empty body
     write_packet(CONTROL_INTERFACE, WRITE_MSG, NULL, 0);
     return 0;
 }

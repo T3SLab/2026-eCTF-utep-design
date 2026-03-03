@@ -26,19 +26,26 @@ OBJECTS = $(BUILDDIR)/HSM.so \
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so
 
-# change C flags
+# Base Crypto Configuration
 CFLAGS += -DCRYPTO_EXAMPLE=1
 CFLAGS += -DNO_WOLFSSL_DIR
 CFLAGS += -DWOLFSSL_AES_DIRECT
 CFLAGS += -DHAVE_AESGCM
-CFLAGS += -DSINGLE_THREADED
-# From https://www.wolfssl.com/documentation/manuals/wolfssl/chapter02.html#building-with-gcc-arm
+CFLAGS += -DSINGLE_THREADED  # Essential for No-RTOS 
+
+# ---> THE CULLING DIET FLAGS <---
+CFLAGS += -DWOLFCRYPT_ONLY      # Removes SSL/TLS overhead 
+CFLAGS += -DNO_ERROR_STRINGS    # Saves several KB of Flash 
+CFLAGS += -DNO_RSA -DNO_DH -DNO_DSA # Removes heavy PKE math
+CFLAGS += -DNO_MD4 -DNO_MD5 -DNO_DES3 -DNO_RC4 # Removes legacy algos
+CFLAGS += -DNO_PWDBASED -DNO_SHA -DNO_HMAC_SHA # Keep only what you use
+CFLAGS += -DGCM_SMALL           # Trades speed for SRAM [cite: 11]
+
+# Hardware Specifics
 CFLAGS += -DHAVE_PK_CALLBACKS
 CFLAGS += -DWOLFSSL_USER_IO
 CFLAGS += -DNO_WRITEV -DTIME_T_NOT_64BIT
-CFLAGS += -DNO_FILESYSTEM
-# tells wolfssl that we will handle RNG on the baremetal target
-# user will need to implement the callbacks
+CFLAGS += -DNO_FILESYSTEM       # Reduces RAM buffer usage 
 CFLAGS += -DNO_DEV_RANDOM
 CFLAGS += -DWC_NO_DEFAULT_DEVID
 CFLAGS += -DWOLF_CRYPTO_CB
@@ -46,11 +53,10 @@ CFLAGS += -DWOLF_CRYPTO_CB
 WOLFSSL_INC = ./wolfssl/wolfcrypt/src
 CFLAGS += -I./wolfssl
 
-# we need to build these objects for the simple crypto example
+# Culled Object List (Removed md5.o and sha.o to save space)
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
-OBJECTS += $(WOLFSSL_INC)/md5.o $(WOLFSSL_INC)/cryptocb.o
-OBJECTS += $(WOLFSSL_INC)/sha256.o $(WOLFSSL_INC)/sha.o
-OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha256.o
+OBJECTS += $(WOLFSSL_INC)/cryptocb.o $(WOLFSSL_INC)/sha256.o
+OBJECTS += $(WOLFSSL_INC)/hmac.o
 endif
 
 NAME = hsm
