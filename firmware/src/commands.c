@@ -105,8 +105,8 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         print_error("Packet too short");
         return -1;
     }
-    
-    // 1. Extract what we need from the incoming command
+
+    // Extract what we need from the incoming command
     read_command_t *command = (read_command_t*)buf;
     uint16_t target_slot = command->slot; // Save this before we overwrite buf!
     
@@ -115,7 +115,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 2. Read the encrypted file from flash into the global current_file
+    // Read the encrypted file from flash into the global current_file
     if (read_file(target_slot, &current_file) < 0) {
         print_error("Failed to read file");
         return -1;
@@ -126,14 +126,14 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 3. REPURPOSE THE UART BUFFER!
     // Cast the incoming 'buf' to our response type and clear it
     read_response_t *resp = (read_response_t*)buf;
     memset(resp, 0, sizeof(read_response_t));
 
-    // 4. Decrypt from current_file into the freshly cleared UART buffer
+    // Decrypt from current_file into the freshly cleared UART buffer
     if (decrypt_sym(current_file.contents, current_file.contents_len, 
-                    AES_KEY, current_file.nonce, resp->contents, current_file.tag) != 0) {
+                    AES_KEY_TABLE[target_slot], current_file.nonce, 
+                    resp->contents, current_file.tag) != 0) {
         print_error("Decryption failed");
         return -1;
     }
@@ -181,7 +181,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 1. Initialize metadata in the shared buffer FIRST
     // This safely zeros out the structure without destroying our ciphertext.
     create_file(
         &current_file,
@@ -191,13 +190,12 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         NULL  
     );
 
-    // 2. Generate unique nonce
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
     generate_nonce(nonce, NONCE_SIZE);
 
-    // 3. Encrypt directly into the now-prepared SHARED global buffer
-    if (encrypt_sym(command->contents, command->contents_len, AES_KEY, nonce, 
+    if (encrypt_sym(command->contents, command->contents_len, 
+                    AES_KEY_TABLE[command->slot], nonce, 
                     current_file.contents, tag) != 0) {
         print_error("Encryption failed");
         return -1;
@@ -206,11 +204,11 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     print_debug("Raw Ciphertext going into Flash:\n");
     print_hex_debug(current_file.contents, command->contents_len);
 
-    // 4. Store the crypto metadata
+    // Store the crypto metadata
     memcpy(current_file.nonce, nonce, NONCE_SIZE);
     memcpy(current_file.tag, tag, TAG_SIZE);
 
-    // 5. Write to flash
+    // Write to flash
     if (write_file(command->slot, &current_file, command->uuid) < 0) {
         print_error("Error storing file");
         return -1;
