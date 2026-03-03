@@ -128,7 +128,7 @@ def secrets_to_c_header(
 
         # Write AES-256 key (32 bytes)
         f.write("// Global AES-256 Key (shared across HSMs)\n")
-        f.write("static const uint8_t AES_KEY[32] = {\n")
+        f.write(f"static const uint8_t AES_KEY[32] = {{\n")
         for i, byte in enumerate(aes_key_bytes):
             f.write(f"  0x{byte:02x}{',' if i < 31 else ''}\n")
         f.write("};\n\n")

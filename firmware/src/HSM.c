@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <strings.h>
 #include "rng.h"
 #include "simple_flash.h"
 #include "host_messaging.h"
@@ -25,6 +25,7 @@
 #include "ti_msp_dl_config.h"
 #include "status_led.h"
 #include "simple_uart.h"
+
 
 /* Code between this #ifdef and the subsequent #endif will
 *  be ignored by the compiler if CRYPTO_EXAMPLE is not set in
