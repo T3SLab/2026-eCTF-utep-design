@@ -36,7 +36,8 @@ def gen_secrets(groups: list[int]) -> bytes:
     :returns: Contents of the secrets file
     """
     # Generate 8 unique RSA key pairs for authentication 
-    hsm_devices = []
+    hsm_devices_public = []
+    hsm_devices_private = []
 
     for i in range(8):
         # 2048-bit keys for the mutual authentication handshake 
@@ -55,20 +56,31 @@ def gen_secrets(groups: list[int]) -> bytes:
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).hex()
 
-        hsm_devices.append({
+        #store the public keys and ID into global.secrets for use in the firmware
+        hsm_devices_public.append({
             "hsm_id": i,
-            "private_key": priv_hex,
-            "public_key": pub_hex
+            "public_key": pub_hex,
         })
 
-    aes_key_hex = secrets_module.token_bytes(32).hex()  # 256-bit AES key for encrypting secrets
+        hsm_devices_private.append({
+            "hsm_id": i,
+            "private_key": priv_hex,
+        })
+
+    aes_keys = [secrets_module.token_bytes(16).hex() for _ in range(8)]  # 256-bit AES key for encrypting secrets
+    
+    # Store private keys in host only file
+    host_keys = {"hsm_devices": hsm_devices_private}
+    with open("host_keys.json", "w") as f:
+        json.dump(host_keys, f, indent=2) 
+
     # Create the secrets object
     # You can change this to generate any secret material
     # The secrets file will never be shared with attackers [cite: 117]
     secrets = {
         "groups": groups,
-        "hsm_devices": hsm_devices, # Added RSA key material [cite: 124]
-        "aes_key": aes_key_hex, # Added AES key
+        "hsm_devices": hsm_devices_public, # Added RSA key material [cite: 124]
+        "aes_keys": aes_keys, # Added AES keys
         "some_secrets": "EXAMPLE",
     }
 

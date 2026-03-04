@@ -45,7 +45,7 @@
  *
  * @return 0 on success, non-zero for other error
  */
-int encrypt_sym(uint8_t *plaintext, size_t len, const uint8_t *key, uint8_t *nonce,
+int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *nonce,
                 uint8_t *ciphertext, uint8_t *auth_tag);
 
 /** @brief Decrypts ciphertext using AES-GCM and verifies the authentication tag
@@ -65,7 +65,7 @@ int encrypt_sym(uint8_t *plaintext, size_t len, const uint8_t *key, uint8_t *non
  *
  * @return 0 on success, non-zero for other error (including tag mismatch)
  */
-int decrypt_sym(uint8_t *ciphertext, size_t len, const uint8_t *key, uint8_t *nonce,
+int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *nonce,
                 uint8_t *plaintext, uint8_t *auth_tag);
 
 /** @brief Hashes arbitrary-length data
@@ -79,19 +79,6 @@ int decrypt_sym(uint8_t *ciphertext, size_t len, const uint8_t *key, uint8_t *no
  * @return 0 on success, non-zero for other error
  */
 int hash(void *data, size_t len, uint8_t *hash_out);
-
-
-/** @brief Computes HMAC of data using SHA-256
- * 
- * @param key A pointer to a buffer of length key_len containing the HMAC key
- * @param key_len The length of the HMAC key in bytes
- * @param data A pointer to a buffer of length data_len containing the data to be authenticated
- * @param data_len The length of the data to be authenticated in bytes
- * @param mac_out A pointer to a buffer of length HASH_SIZE (32 bytes) where the resulting HMAC output will be written to
- */
-int hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
-    uint8_t *mac_out);
-
 
 
 /** @brief Computes HMAC of data using SHA-256
