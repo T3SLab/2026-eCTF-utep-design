@@ -53,8 +53,11 @@ void generate_list_files(list_response_t *file_list) {
 
             file_list->metadata[file_list->n_files].slot = i;
             file_list->metadata[file_list->n_files].group_id = temp_file.group_id;
-            //TODO: check this function for potetnail buffer overflow vulnerability
-            strcpy(file_list->metadata[file_list->n_files].name, (char *)&temp_file.name);
+
+            // strncpy is used here to prevent potential buffer overflow if temp_file.name is not null-terminated
+            strncpy(file_list->metadata[file_list->n_files].name, (char *)&temp_file.name, MAX_NAME_SIZE - 1);
+            // Ensure null termination in case temp_file.name is not properly null-terminated
+            file_list->metadata[file_list->n_files].name[MAX_NAME_SIZE - 1] = '\0';
             file_list->n_files++;
         }
     }
@@ -106,7 +109,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
     
-    // 1. Extract what we need from the incoming command
+    // Extract what we need from the incoming command
     read_command_t *command = (read_command_t*)buf;
     uint16_t target_slot = command->slot; // Save this before we overwrite buf!
     
@@ -115,7 +118,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 2. Read the encrypted file from flash into the global current_file
+    // Read the encrypted file from flash into the global current_file
     if (read_file(target_slot, &current_file) < 0) {
         print_error("Failed to read file");
         return -1;
@@ -126,12 +129,12 @@ int read(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 3. REPURPOSE THE UART BUFFER!
+
     // Cast the incoming 'buf' to our response type and clear it
     read_response_t *resp = (read_response_t*)buf;
     memset(resp, 0, sizeof(read_response_t));
 
-    // 4. Decrypt from current_file into the freshly cleared UART buffer
+    // Decrypt from current_file into the freshly cleared UART buffer
     if (decrypt_sym(current_file.contents, current_file.contents_len, 
                     AES_KEY, current_file.nonce, resp->contents, current_file.tag) != 0) {
         print_error("Decryption failed");
@@ -181,7 +184,7 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    // 1. Initialize metadata in the shared buffer FIRST
+    // Initialize metadata in the shared buffer FIRST
     // This safely zeros out the structure without destroying our ciphertext.
     create_file(
         &current_file,
@@ -191,12 +194,12 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         NULL  
     );
 
-    // 2. Generate unique nonce
+    // Generate unique nonce
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
     generate_nonce(nonce, NONCE_SIZE);
 
-    // 3. Encrypt directly into the now-prepared SHARED global buffer
+    // Encrypt directly into the now-prepared SHARED global buffer
     if (encrypt_sym(command->contents, command->contents_len, AES_KEY, nonce, 
                     current_file.contents, tag) != 0) {
         print_error("Encryption failed");
@@ -206,11 +209,11 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     print_debug("Raw Ciphertext going into Flash:\n");
     print_hex_debug(current_file.contents, command->contents_len);
 
-    // 4. Store the crypto metadata
+    // Store the crypto metadata
     memcpy(current_file.nonce, nonce, NONCE_SIZE);
     memcpy(current_file.tag, tag, TAG_SIZE);
 
-    // 5. Write to flash
+    // Write to flash
     if (write_file(command->slot, &current_file, command->uuid) < 0) {
         print_error("Error storing file");
         return -1;
@@ -262,6 +265,12 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
+    // check permissions on the received file
+    if (!validate_permission(recv_resp.file.group_id, PERM_RECEIVE)) {
+        print_error("Invalid receive permission");
+        return -1;
+    }
+
     // write that file into the file system
     if (write_file(command->write_slot, &recv_resp.file, recv_resp.uuid) < 0) {
         print_error("Writing received file failed");
@@ -305,11 +314,29 @@ int interrogate(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
+    // filter the list based on what we have permissions to receive
+    list_response_t filtered_list;
+    // zero out the filtered list
+    memset(&filtered_list, 0, sizeof(filtered_list));
+
+    // loop through the received list and apply our local permissions to filter it
+    for (uint32_t i = 0; i < final_list_buf.n_files; i++) {
+        group_id_t group_id = final_list_buf.metadata[i].group_id;
+
+        // local permission to receive this group
+        if (validate_permission(group_id, PERM_RECEIVE)) {
+            filtered_list.metadata[filtered_list.n_files] = final_list_buf.metadata[i];
+            filtered_list.n_files++;
+        }
+    }
+
+    // Return only allowed files 
+    pkt_len_t length = LIST_PKT_LEN(filtered_list.n_files);
+
     // return the final list to the user
-    write_packet(CONTROL_INTERFACE, INTERROGATE_MSG, &final_list_buf, len_recv_msg);
+    write_packet(CONTROL_INTERFACE, INTERROGATE_MSG, &filtered_list, length);
     return 0;
 }
-
 
 /** @brief Perform the listen operation
  *
@@ -338,9 +365,6 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             // generate a list of files for the other device
             generate_list_files(&file_list);
 
-            // TODO: the reference design does not implement *ANY* security
-            // you will want to add something here to comply with SR1
-
             // send the list of files on this device
             write_length = LIST_PKT_LEN(file_list.n_files);
             write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, &file_list, write_length);
@@ -349,9 +373,6 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             // get the request
             command = (receive_request_t *)uart_buf;
 
-            // TODO: the reference design does not implement *ANY* security
-            // you will want to add something here to comply with SR1
-
             // if this read fails, the other device will not receive a response and
             // may need to be reset before further testing can occur
             if (read_file(command->slot, &recv_resp.file) < 0) {
@@ -359,6 +380,26 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
                 return -1;
             }
 
+            group_id_t group_id = recv_resp.file.group_id;
+
+            // check remote permissions
+            bool allowed = false;
+
+            // loop through the permissions sent by the neighbor and see if any match our group_id with receive permissions
+            for (int i = 0; i < MAX_PERMS; i++) {
+                if (command->permissions[i].group_id == group_id &&
+                    command->permissions[i].receive) {
+                    allowed = true;
+                    break;
+                }
+            }
+            
+            if (!allowed) {
+                print_error("neighbor HSM lacks receive permission");
+                return -1;
+            }
+
+           
             metadata = get_file_metadata(command->slot);
             if (metadata == NULL) {
                 print_error("Getting metadata failed");
@@ -366,6 +407,7 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             }
 
             memcpy(&recv_resp.uuid, &metadata->uuid, UUID_SIZE);
+
 
             // send the file to the neighbor hsm
             write_length = sizeof(receive_response_t);
