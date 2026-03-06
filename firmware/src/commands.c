@@ -14,7 +14,7 @@
 #include "host_messaging.h"
 #include "commands.h"
 #include "filesystem.h"
-#include "rng.c"
+#include "rng.h"
 #include "secrets.h"
 #include "simple_crypto.h"
 #include <string.h>
@@ -26,10 +26,12 @@
 static union {
     file_t file;
     read_response_t resp;
+    receive_response_t recv_resp;
 } shared_buffer;
 
 #define current_file (shared_buffer.file)
 #define global_file_info (shared_buffer.resp)
+#define current_recv_resp (shared_buffer.recv_resp)
 
 /**********************************************************
  ******************** HELPER FUNCTIONS ********************
@@ -201,9 +203,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    print_debug("Raw Ciphertext going into Flash:\n");
-    print_hex_debug(current_file.contents, command->contents_len);
-
     // Store the crypto metadata
     memcpy(current_file.nonce, nonce, NONCE_SIZE);
     memcpy(current_file.tag, tag, TAG_SIZE);
@@ -229,7 +228,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
 int receive(uint16_t pkt_len, uint8_t *buf) {
     receive_command_t *command = (receive_command_t *)buf;
     receive_request_t request;
-    receive_response_t recv_resp;
     msg_type_t cmd;
     uint16_t len_recv_msg;
     int ret;
@@ -240,7 +238,7 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
     }
 
     // zeroize the buffers we will use
-    memset(&recv_resp, 0, sizeof(recv_resp));
+    memset(&current_recv_resp, 0, sizeof(current_recv_resp));
     memset(&request, 0, sizeof(request));
 
     // prep request to neighbor
@@ -248,20 +246,28 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
     memcpy(&request.permissions, &global_permissions, sizeof(group_permission_t) * MAX_PERMS);
 
     // request the file from the neighboring device
-    write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, (void *)&request, sizeof(receive_request_t));
+    print_debug("Sending request to neighbor\n");
+    if (write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, (void *)&request, sizeof(receive_request_t)) != MSG_OK) {
+        print_error("Failed to send request to neighbor");
+        return -1;
+    }
 
     // set essentially no limit to the receive message size
     len_recv_msg = 0xffff;
 
     // recieve the response message
-    read_packet(TRANSFER_INTERFACE, &cmd, &recv_resp, &len_recv_msg);
+    print_debug("Waiting for neighbor response\n");
+    if (read_packet(TRANSFER_INTERFACE, &cmd, &current_recv_resp, &len_recv_msg) != MSG_OK) {
+        print_error("Failed to receive response from neighbor");
+        return -1;
+    }
     if (cmd != RECEIVE_MSG) {
         print_error("Opcode mismatch");
         return -1;
     }
 
     // write that file into the file system
-    if (write_file(command->write_slot, &recv_resp.file, recv_resp.uuid) < 0) {
+    if (write_file(command->write_slot, &current_recv_resp.file, current_recv_resp.uuid) < 0) {
         print_error("Writing received file failed");
         return -1;
     }
@@ -319,7 +325,6 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
     pkt_len_t write_length, read_length;
     list_response_t file_list;
     receive_request_t *command;
-    receive_response_t recv_resp;
     const filesystem_entry_t *metadata;
 
     read_length = sizeof(uart_buf);
@@ -350,24 +355,32 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             // TODO: the reference design does not implement *ANY* security
             // you will want to add something here to comply with SR1
 
-            // if this read fails, the other device will not receive a response and
-            // may need to be reset before further testing can occur
-            if (read_file(command->slot, &recv_resp.file) < 0) {
+            {
+                char slot_dbg[32];
+                snprintf(slot_dbg, sizeof(slot_dbg), "Reading slot %d\n", command->slot);
+                print_debug(slot_dbg);
+            }
+
+            memset(&current_recv_resp, 0, sizeof(current_recv_resp));
+
+            if (read_file(command->slot, &current_recv_resp.file) < 0) {
                 print_error("Failed to read file");
+                write_packet(TRANSFER_INTERFACE, ERROR_MSG, "read failed", 11);
                 return -1;
             }
 
             metadata = get_file_metadata(command->slot);
             if (metadata == NULL) {
                 print_error("Getting metadata failed");
+                write_packet(TRANSFER_INTERFACE, ERROR_MSG, "metadata failed", 15);
                 return -1;
             }
 
-            memcpy(&recv_resp.uuid, &metadata->uuid, UUID_SIZE);
+            memcpy(&current_recv_resp.uuid, &metadata->uuid, UUID_SIZE);
 
             // send the file to the neighbor hsm
             write_length = sizeof(receive_response_t);
-            write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, &recv_resp, write_length);
+            write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, &current_recv_resp, write_length);
             break;
         default:
             print_error("Bad message type");
