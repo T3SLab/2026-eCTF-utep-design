@@ -80,7 +80,7 @@ The reference design allocates files for each slot as follows:
 #define FILE_START_PAGE_FROM_SLOT(slot) FILES_START_ADDR + (STORED_FILE_SIZE*slot)
 
 // Calculate the total size of a file in flash, including its metadata
-#define FILE_TOTAL_SIZE(len) len + offsetof(file_t, contents) + NONCE_SIZE + TAG_SIZE
+#define FILE_TOTAL_SIZE(len) (offsetof(file_t, contents) + (len))
 
 // Each file will be 9 pages in size. 8 pages for the file contents + 1 page for
 // metadata
@@ -93,13 +93,15 @@ The reference design allocates files for each slot as follows:
 #define FILE_IN_USE 0xdeadbeef
 // used to actually define the file object
 typedef struct {
-    uint32_t in_use;  // FILE_IN_USE if in use
+    uint32_t in_use;
     group_id_t group_id;
     char name[MAX_NAME_SIZE];
     uint16_t contents_len;
-    uint8_t contents[MAX_CONTENTS_SIZE];
+
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
+
+    uint8_t contents[MAX_CONTENTS_SIZE];
 } file_t;
 
 /** @brief Initialize the filesystem

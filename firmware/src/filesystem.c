@@ -73,7 +73,6 @@ int create_file(
     if (contents != NULL && contents_len > 0) {
         memcpy(dest->contents, contents, contents_len);
     }
-    memcpy(dest->contents, contents, contents_len);
 
     return 0;
 }
@@ -114,13 +113,20 @@ int write_file(slot_t slot, file_t *src, uint8_t *uuid) {
  * @return 0 upon success. A negative value otherwise.
 */
 int read_file(slot_t slot, file_t *dest) {
+
     int flash_addr, file_size;
 
     flash_addr = FILE_ALLOCATION_TABLE[slot].flash_addr;
-    file_size = FILE_ALLOCATION_TABLE[slot].length;
-    if (flash_addr < 0 || file_size < 0) {
+    file_size  = FILE_ALLOCATION_TABLE[slot].length;
+
+    if (flash_addr == 0 || file_size == 0)
         return -1;
-    }
+
+    if (file_size > sizeof(file_t))
+        return -1;
+
+    memset(dest, 0, sizeof(file_t));
+
     flash_simple_read(flash_addr, dest, file_size);
 
     return 0;

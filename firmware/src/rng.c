@@ -28,3 +28,8 @@ void generate_nonce(uint8_t *out, size_t len){
     }
 
 }
+
+int trng_generate_block(unsigned char *output, unsigned int sz) {
+    generate_nonce(output, sz);
+    return 0;
+}

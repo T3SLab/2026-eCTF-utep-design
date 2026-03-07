@@ -23,3 +23,4 @@ global.secrets:
 
 clean:
 	rm -rfI *.hsm/ global.secrets
+	rm host_keys.json

@@ -21,25 +21,41 @@ OBJECTS = $(BUILDDIR)/HSM.so \
     $(BUILDDIR)/host_messaging.so \
     $(BUILDDIR)/security.so \
     $(BUILDDIR)/filesystem.so \
-    $(BUILDDIR)/commands.so
+    $(BUILDDIR)/commands.so \
+    $(BUILDDIR)/rng.so 
 
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so
 
 # Base Crypto Configuration
+CFLAGS += -include ./inc/rng.h
 CFLAGS += -DCRYPTO_EXAMPLE=1
 CFLAGS += -DNO_WOLFSSL_DIR
 CFLAGS += -DWOLFSSL_AES_DIRECT
 CFLAGS += -DHAVE_AESGCM
-CFLAGS += -DSINGLE_THREADED  # Essential for No-RTOS 
+CFLAGS += -DSINGLE_THREADED  # Essential for No-RTOS
+CFLAGS += -DCUSTOM_RAND_GENERATE_BLOCK=trng_generate_block
+
+# SP math backend
+CFLAGS += -DWOLFSSL_SP_MATH_ALL
+CFLAGS += -DWOLFSSL_SP_SMALL
+CFLAGS += -DSP_WORD_SIZE=32
+
+# RSA-PSS support
+CFLAGS += -DHAVE_RSA
+CFLAGS += -DWC_RSA_PSS
+CFLAGS += -DWOLFSSL_SHA256
+CFLAGS += -DHAVE_PKCS8
+CFLAGS += -DWOLFSSL_KEY_GEN
+
 
 # ---> THE CULLING DIET FLAGS <---
-CFLAGS += -DWOLFCRYPT_ONLY      # Removes SSL/TLS overhead 
-CFLAGS += -DNO_ERROR_STRINGS    # Saves several KB of Flash 
-CFLAGS += -DNO_RSA -DNO_DH -DNO_DSA # Removes heavy PKE math
-CFLAGS += -DNO_MD4 -DNO_MD5 -DNO_DES3 -DNO_RC4 # Removes legacy algos
-CFLAGS += -DNO_PWDBASED -DNO_SHA -DNO_HMAC_SHA # Keep only what you use
-CFLAGS += -DGCM_SMALL           # Trades speed for SRAM [cite: 11]
+CFLAGS += -DWOLFCRYPT_ONLY
+CFLAGS += -DNO_ERROR_STRINGS
+CFLAGS += -DNO_DH -DNO_DSA         
+CFLAGS += -DNO_MD4 -DNO_MD5 -DNO_DES3 -DNO_RC4
+CFLAGS += -DNO_PWDBASED
+CFLAGS += -DGCM_SMALL        
 
 # Hardware Specifics
 CFLAGS += -DHAVE_PK_CALLBACKS
@@ -57,6 +73,13 @@ CFLAGS += -I./wolfssl
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/cryptocb.o $(WOLFSSL_INC)/sha256.o
 OBJECTS += $(WOLFSSL_INC)/hmac.o
+OBJECTS += $(WOLFSSL_INC)/rsa.o $(WOLFSSL_INC)/random.o
+OBJECTS += $(WOLFSSL_INC)/asn.o 
+OBJECTS += $(WOLFSSL_INC)/sha.o      
+OBJECTS += $(WOLFSSL_INC)/memory.o   
+#OBJECTS += $(WOLFSSL_INC)/sp_c32.o 
+#OBJECTS += $(WOLFSSL_INC)/integer.o
+OBJECTS += $(WOLFSSL_INC)/sp_int.o
 endif
 
 NAME = hsm

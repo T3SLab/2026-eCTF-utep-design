@@ -14,7 +14,7 @@
 #include "host_messaging.h"
 #include "commands.h"
 #include "filesystem.h"
-#include "rng.c"
+#include "rng.h"
 #include "secrets.h"
 #include "simple_crypto.h"
 #include <string.h>
@@ -221,6 +221,131 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     return 0;
 }
 
+/**
+ * @brief Mutual RSA authentication between two HSMs.
+ *
+ * @param is_initiator  1 = initiator (receive), 0 = responder (listen)
+ * @param pre_read_chal For responder only: caller already read C1 from the
+ *                      wire, pass it here so we don't re-read. Pass NULL to
+ *                      have this function read C1 itself.
+ * @return 0 on success, -1 on failure
+ */
+static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal)
+{
+    auth_challenge_t  chal_out, chal_in;
+    auth_response_t   resp_out, resp_in;
+    auth_confirm_t    conf_out, conf_in;
+    msg_type_t        cmd;
+    uint16_t          msg_len;
+    int               ret;
+
+    if (is_initiator) {
+        // Generate C1, send to HSM2
+        generate_nonce(chal_out.challenge, CHALLENGE_SIZE);
+        print_debug("Auth: generated challenge C1\n");
+
+        write_packet(TRANSFER_INTERFACE, AUTH_MSG,
+                     &chal_out, sizeof(auth_challenge_t));
+
+        // Receive S1 + C2 + HSM2_ID from HSM2
+        msg_len = sizeof(auth_response_t);
+        ret = read_packet(TRANSFER_INTERFACE, &cmd, &resp_in, &msg_len);
+        if (ret != MSG_OK || cmd != AUTH_MSG) {
+            print_error("Auth: bad response from peer\n");
+            return -1;
+        }
+
+        // Bounds check HSM ID before array index
+        if (resp_in.hsm_id >= 8) {
+            print_error("Auth: invalid peer HSM ID\n");
+            return -1;
+        }
+
+        // Verify S1 = SIGN(privkey2, C1)
+        ret = rsa_verify(chal_out.challenge, CHALLENGE_SIZE,
+                         resp_in.sig,
+                         RSA_PUB_KEYS[resp_in.hsm_id],
+                         sizeof(RSA_PUB_KEYS[0]));
+        if (ret != 0) {
+            print_error("Auth: peer signature invalid\n");
+            return -1;
+        }
+
+        // Sign C2, send S2 + HSM_ID
+        ret = rsa_sign(resp_in.challenge, CHALLENGE_SIZE,
+                       RSA_PRIV_KEY, sizeof(RSA_PRIV_KEY),
+                       conf_out.sig);
+        if (ret != 0) {
+            print_error("Auth: signing failed\n");
+            return -1;
+        }
+        conf_out.hsm_id = HSM_ID;
+
+        write_packet(TRANSFER_INTERFACE, AUTH_MSG,
+                     &conf_out, sizeof(auth_confirm_t));
+
+        print_debug("Auth: mutual authentication SUCCESS (initiator)\n");
+        return 0;
+
+    } else {
+        // RESPONDER side
+        if (pre_read_chal != NULL) {
+            // Caller already consumed C1 from the wire 
+            memcpy(&chal_in, pre_read_chal, sizeof(auth_challenge_t));
+            print_debug("Auth: using pre-read challenge C1\n");
+        } else {
+            // Read C1 
+            msg_len = sizeof(auth_challenge_t);
+            ret = read_packet(TRANSFER_INTERFACE, &cmd, &chal_in, &msg_len);
+            if (ret != MSG_OK || cmd != AUTH_MSG) {
+                print_error("Auth: bad challenge from initiator\n");
+                return -1;
+            }
+        }
+
+        // Sign C1, generate C2, send S1 + C2 + our HSM_ID
+        ret = rsa_sign(chal_in.challenge, CHALLENGE_SIZE,
+                       RSA_PRIV_KEY, sizeof(RSA_PRIV_KEY),
+                       resp_out.sig);
+        if (ret != 0) {
+            print_error("Auth: signing C1 failed\n");
+            return -1;
+        }
+
+        generate_nonce(resp_out.challenge, CHALLENGE_SIZE);
+        print_debug("Auth: generated challenge C2\n");
+        resp_out.hsm_id = HSM_ID;
+
+        write_packet(TRANSFER_INTERFACE, AUTH_MSG,
+                     &resp_out, sizeof(auth_response_t));
+
+        // Receive S2 + HSM1_ID, verify
+        msg_len = sizeof(auth_confirm_t);
+        ret = read_packet(TRANSFER_INTERFACE, &cmd, &conf_in, &msg_len);
+        if (ret != MSG_OK || cmd != AUTH_MSG) {
+            print_error("Auth: bad confirmation from initiator\n");
+            return -1;
+        }
+
+        // Bounds check HSM ID before array index
+        if (conf_in.hsm_id >= 8) {
+            print_error("Auth: invalid initiator HSM ID\n");
+            return -1;
+        }
+
+        ret = rsa_verify(resp_out.challenge, CHALLENGE_SIZE,
+                         conf_in.sig,
+                         RSA_PUB_KEYS[conf_in.hsm_id],
+                         sizeof(RSA_PUB_KEYS[0]));
+        if (ret != 0) {
+            print_error("Auth: initiator signature invalid\n");
+            return -1;
+        }
+
+        print_debug("Auth: mutual authentication SUCCESS (responder)\n");
+        return 0;
+    }
+}
 
 /** @brief Perform the receive operation
  *
@@ -235,28 +360,29 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
     receive_response_t recv_resp;
     msg_type_t cmd;
     uint16_t len_recv_msg;
-    int ret;
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
         return -1;
     }
 
-    // zeroize the buffers we will use
+    // Initiator: start auth handshake, pass NULL (we send first)
+    if (perform_mutual_auth(1, NULL) != 0) {
+        print_error("Mutual auth failed");
+        return -1;
+    }
+
     memset(&recv_resp, 0, sizeof(recv_resp));
     memset(&request, 0, sizeof(request));
 
-    // prep request to neighbor
     request.slot = command->read_slot;
-    memcpy(&request.permissions, &global_permissions, sizeof(group_permission_t) * MAX_PERMS);
+    memcpy(&request.permissions, &global_permissions,
+           sizeof(group_permission_t) * MAX_PERMS);
 
-    // request the file from the neighboring device
-    write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, (void *)&request, sizeof(receive_request_t));
+    write_packet(TRANSFER_INTERFACE, RECEIVE_MSG,
+                 (void *)&request, sizeof(receive_request_t));
 
-    // set essentially no limit to the receive message size
     len_recv_msg = 0xffff;
-
-    // recieve the response message
     read_packet(TRANSFER_INTERFACE, &cmd, &recv_resp, &len_recv_msg);
     if (cmd != RECEIVE_MSG) {
         print_error("Opcode mismatch");
@@ -274,7 +400,7 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
         print_error("Writing received file failed");
         return -1;
     }
-    // empty success message
+
     write_packet(CONTROL_INTERFACE, RECEIVE_MSG, NULL, 0);
     return 0;
 }
@@ -350,25 +476,35 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
     const filesystem_entry_t *metadata;
 
     read_length = sizeof(uart_buf);
-
-    // Receive a packet from a neighboring hsm
     memset(uart_buf, 0, sizeof(uart_buf));
+
+    // Read first packet from neighbor
     read_packet(TRANSFER_INTERFACE, &cmd, uart_buf, &read_length);
+
+    if (cmd == AUTH_MSG) {
+        // Pass the already-read C1 
+        if (perform_mutual_auth(0, (auth_challenge_t *)uart_buf) != 0) {
+            print_error("Mutual auth failed in listen");
+            return -1;
+        }
+        // Auth done — now read the actual command packet
+        read_length = sizeof(uart_buf);
+        memset(uart_buf, 0, sizeof(uart_buf));
+        read_packet(TRANSFER_INTERFACE, &cmd, uart_buf, &read_length);
+    }
+    // If cmd was INTERROGATE_MSG (no auth), fall straight through to switch
 
     switch (cmd) {
         case INTERROGATE_MSG:
-            // zeroize the buffers we will use
             memset(&file_list, 0, sizeof(file_list));
-
-            // generate a list of files for the other device
             generate_list_files(&file_list);
 
             // send the list of files on this device
             write_length = LIST_PKT_LEN(file_list.n_files);
             write_packet(TRANSFER_INTERFACE, INTERROGATE_MSG, &file_list, write_length);
             break;
+
         case RECEIVE_MSG:
-            // get the request
             command = (receive_request_t *)uart_buf;
 
             // if this read fails, the other device will not receive a response and
@@ -411,12 +547,12 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             write_length = sizeof(receive_response_t);
             write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, &recv_resp, write_length);
             break;
+
         default:
             print_error("Bad message type");
             return -1;
     }
 
-    // blank success message
     write_packet(CONTROL_INTERFACE, LISTEN_MSG, NULL, 0);
     return 0;
 }

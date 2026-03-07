@@ -186,4 +186,102 @@ int hmac_sha256(const uint8_t *key, size_t key_len,const uint8_t *data, size_t d
     return ret;
 }
 
+int rsa_sign(const uint8_t *data, size_t data_len,const uint8_t *der_key, size_t der_key_len,uint8_t *sig_out){
+    RsaKey key;
+    WC_RNG rng;
+    word32 idx = 0;
+    uint8_t hash_buf[WC_SHA256_DIGEST_SIZE];
+
+    int ret;
+
+    /* hash message first */
+    ret = wc_Sha256Hash(data, data_len, hash_buf);
+    if (ret != 0)
+        return ret;
+
+    ret = wc_InitRsaKey(&key, NULL);
+    if (ret != 0)
+        return ret;
+
+    ret = wc_RsaPrivateKeyDecode(der_key, &idx, &key, der_key_len);
+    if (ret != 0) {
+        wc_FreeRsaKey(&key);
+        return ret;
+    }
+
+    ret = wc_InitRng(&rng);
+    if (ret != 0) {
+        wc_FreeRsaKey(&key);
+        return ret;
+    }
+
+    ret = wc_RsaPSS_Sign(
+        hash_buf,
+        WC_SHA256_DIGEST_SIZE,
+        sig_out,
+        RSA_SIG_SIZE,
+        WC_HASH_TYPE_SHA256,
+        WC_MGF1SHA256,
+        &key,
+        &rng
+    );
+
+    wc_FreeRng(&rng);
+    wc_FreeRsaKey(&key);
+
+    return (ret == RSA_SIG_SIZE) ? 0 : ret;
+}
+
+int rsa_verify(const uint8_t *data, size_t data_len, const uint8_t *sig, const uint8_t *der_key, size_t der_key_len){
+    RsaKey key;
+    word32 idx = 0;
+    uint8_t verify_buf[RSA_SIG_SIZE];
+    uint8_t hash_buf[WC_SHA256_DIGEST_SIZE];
+
+    int ret;
+
+    /* hash message */
+    ret = wc_Sha256Hash(data, data_len, hash_buf);
+    if (ret != 0)
+        return ret;
+
+    ret = wc_InitRsaKey(&key, NULL);
+    if (ret != 0)
+        return ret;
+
+    ret = wc_RsaPublicKeyDecode(der_key, &idx, &key, der_key_len);
+    if (ret != 0) {
+        wc_FreeRsaKey(&key);
+        return ret;
+    }
+
+    ret = wc_RsaPSS_Verify(
+        sig,
+        RSA_SIG_SIZE,
+        verify_buf,
+        sizeof(verify_buf),
+        WC_HASH_TYPE_SHA256,
+        WC_MGF1SHA256,
+        &key
+    );
+
+    if (ret < 0) {
+        wc_FreeRsaKey(&key);
+        return ret;
+    }
+
+    ret = wc_RsaPSS_CheckPadding(
+        hash_buf,
+        WC_SHA256_DIGEST_SIZE,
+        verify_buf,
+        ret,
+        WC_HASH_TYPE_SHA256
+    );
+
+    wc_FreeRsaKey(&key);
+
+    return ret;
+}
+
+
 #endif // CRYPTO_EXAMPLE
