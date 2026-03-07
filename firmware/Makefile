@@ -22,14 +22,15 @@ OBJECTS = $(BUILDDIR)/HSM.so \
     $(BUILDDIR)/security.so \
     $(BUILDDIR)/filesystem.so \
     $(BUILDDIR)/commands.so \
-    $(BUILDDIR)/rng.so 
+    $(BUILDDIR)/rng.so \
 
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so
 
-# Base Crypto Configuration
+
 CFLAGS += -include ./inc/rng.h
 CFLAGS += -DCRYPTO_EXAMPLE=1
+CFLAGS += -DWOLFSSL_USER_SETTINGS
 CFLAGS += -DNO_WOLFSSL_DIR
 CFLAGS += -DWOLFSSL_AES_DIRECT
 CFLAGS += -DHAVE_AESGCM
@@ -38,7 +39,6 @@ CFLAGS += -DCUSTOM_RAND_GENERATE_BLOCK=trng_generate_block
 
 # SP math backend
 CFLAGS += -DWOLFSSL_SP_MATH_ALL
-CFLAGS += -DWOLFSSL_SP_SMALL
 CFLAGS += -DSP_WORD_SIZE=32
 
 # RSA-PSS support
@@ -47,6 +47,7 @@ CFLAGS += -DWC_RSA_PSS
 CFLAGS += -DWOLFSSL_SHA256
 CFLAGS += -DHAVE_PKCS8
 CFLAGS += -DWOLFSSL_KEY_GEN
+CFLAGS += -DWOLFSSL_HAVE_SP_RSA
 
 
 # ---> THE CULLING DIET FLAGS <---
@@ -61,23 +62,28 @@ CFLAGS += -DGCM_SMALL
 CFLAGS += -DHAVE_PK_CALLBACKS
 CFLAGS += -DWOLFSSL_USER_IO
 CFLAGS += -DNO_WRITEV -DTIME_T_NOT_64BIT
-CFLAGS += -DNO_FILESYSTEM       # Reduces RAM buffer usage 
+CFLAGS += -DNO_FILESYSTEM
 CFLAGS += -DNO_DEV_RANDOM
 CFLAGS += -DWC_NO_DEFAULT_DEVID
 CFLAGS += -DWOLF_CRYPTO_CB
 
+CFLAGS += -DHAVE_AESGCM
+CFLAGS += -DHAVE_HMAC
+
+
 WOLFSSL_INC = ./wolfssl/wolfcrypt/src
 CFLAGS += -I./wolfssl
 
-# Culled Object List (Removed md5.o and sha.o to save space)
+# Culled Object List (Removed md5.o to save space)
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
 OBJECTS += $(WOLFSSL_INC)/cryptocb.o $(WOLFSSL_INC)/sha256.o
-OBJECTS += $(WOLFSSL_INC)/hmac.o
+OBJECTS += $(WOLFSSL_INC)/hmac.o  $(WOLFSSL_INC)/sha.o
+OBJECTS += $(WOLFSSL_INC)/md5.o 
 OBJECTS += $(WOLFSSL_INC)/rsa.o $(WOLFSSL_INC)/random.o
 OBJECTS += $(WOLFSSL_INC)/asn.o 
 OBJECTS += $(WOLFSSL_INC)/sha.o      
 OBJECTS += $(WOLFSSL_INC)/memory.o   
-#OBJECTS += $(WOLFSSL_INC)/sp_c32.o 
+OBJECTS += $(WOLFSSL_INC)/sp_c32.o
 #OBJECTS += $(WOLFSSL_INC)/integer.o
 OBJECTS += $(WOLFSSL_INC)/sp_int.o
 endif

@@ -60,7 +60,7 @@
 // we also need to add auth_tag -Encryption alone only hides data — it doesn't prove nobody modified it. The auth tag is a cryptographic checksum that proves:
 // - The ciphertext was created by someone who knows the key
 // - Not a single bit of the ciphertext was changed
-int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *nonce,
+int encrypt_sym(uint8_t *plaintext, size_t len, const uint8_t *key, uint8_t *nonce,
                 uint8_t *ciphertext, uint8_t *auth_tag)
 {
     // We need to first load the context - this is like the library that does the encrypting
@@ -117,7 +117,7 @@ int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *nonce,
  *
  * @return 0 on success, non-zero for other error (including tag mismatch)
  */
-int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *nonce,
+int decrypt_sym(uint8_t *ciphertext, size_t len, const uint8_t *key, uint8_t *nonce,
                 uint8_t *plaintext, uint8_t *auth_tag)
 {
     Aes ctx;

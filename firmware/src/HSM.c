@@ -109,6 +109,7 @@ void init() {
     // Initialize all of the hardware components
     SYSCFG_DL_init();
 
+    rng_init();
     init_fs();
 }
 

@@ -18,7 +18,6 @@ uint32_t trng_get_word(void){
     return DL_TRNG_getCapture(TRNG);
 }
 
-//TODO: test this out, I have no idea if it actually works -SebL
 void generate_nonce(uint8_t *out, size_t len){
     for(size_t i = 0; i < len; ){
         uint32_t r = trng_get_word();

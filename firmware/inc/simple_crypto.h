@@ -47,7 +47,7 @@
  *
  * @return 0 on success, non-zero for other error
  */
-int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *nonce,
+int encrypt_sym(uint8_t *plaintext, size_t len, const uint8_t *key, uint8_t *nonce,
                 uint8_t *ciphertext, uint8_t *auth_tag);
 
 /** @brief Decrypts ciphertext using AES-GCM and verifies the authentication tag
@@ -67,7 +67,7 @@ int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *nonce,
  *
  * @return 0 on success, non-zero for other error (including tag mismatch)
  */
-int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *nonce,
+int decrypt_sym(uint8_t *ciphertext, size_t len, const uint8_t *key, uint8_t *nonce,
                 uint8_t *plaintext, uint8_t *auth_tag);
 
 /** @brief Hashes arbitrary-length data

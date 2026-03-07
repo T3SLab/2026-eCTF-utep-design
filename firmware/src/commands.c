@@ -26,10 +26,12 @@
 static union {
     file_t file;
     read_response_t resp;
+    receive_response_t recv_resp;
 } shared_buffer;
 
 #define current_file (shared_buffer.file)
 #define global_file_info (shared_buffer.resp)
+#define current_recv_resp (shared_buffer.recv_resp)
 
 /**********************************************************
  ******************** HELPER FUNCTIONS ********************
@@ -204,9 +206,6 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    print_debug("Raw Ciphertext going into Flash:\n");
-    print_hex_debug(current_file.contents, command->contents_len);
-
     // Store the crypto metadata
     memcpy(current_file.nonce, nonce, NONCE_SIZE);
     memcpy(current_file.tag, tag, TAG_SIZE);
@@ -262,6 +261,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
         }
 
         // Verify S1 = SIGN(privkey2, C1)
+        print_debug("Auth: verifying S1...\n");
         ret = rsa_verify(chal_out.challenge, CHALLENGE_SIZE,
                          resp_in.sig,
                          RSA_PUB_KEYS[resp_in.hsm_id],
@@ -270,8 +270,10 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
             print_error("Auth: peer signature invalid\n");
             return -1;
         }
+        print_debug("Auth: S1 verified OK\n");
 
         // Sign C2, send S2 + HSM_ID
+        print_debug("Auth: signing C2...\n");
         ret = rsa_sign(resp_in.challenge, CHALLENGE_SIZE,
                        RSA_PRIV_KEY, sizeof(RSA_PRIV_KEY),
                        conf_out.sig);
@@ -279,6 +281,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
             print_error("Auth: signing failed\n");
             return -1;
         }
+        print_debug("Auth: C2 signed OK\n");
         conf_out.hsm_id = HSM_ID;
 
         write_packet(TRANSFER_INTERFACE, AUTH_MSG,
@@ -304,6 +307,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
         }
 
         // Sign C1, generate C2, send S1 + C2 + our HSM_ID
+        print_debug("Auth: signing C1...\n");
         ret = rsa_sign(chal_in.challenge, CHALLENGE_SIZE,
                        RSA_PRIV_KEY, sizeof(RSA_PRIV_KEY),
                        resp_out.sig);
@@ -311,6 +315,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
             print_error("Auth: signing C1 failed\n");
             return -1;
         }
+        print_debug("Auth: C1 signed OK\n");
 
         generate_nonce(resp_out.challenge, CHALLENGE_SIZE);
         print_debug("Auth: generated challenge C2\n");
@@ -318,6 +323,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
 
         write_packet(TRANSFER_INTERFACE, AUTH_MSG,
                      &resp_out, sizeof(auth_response_t));
+        print_debug("Auth: sent S1+C2, waiting for confirm...\n");
 
         // Receive S2 + HSM1_ID, verify
         msg_len = sizeof(auth_confirm_t);
@@ -326,6 +332,7 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
             print_error("Auth: bad confirmation from initiator\n");
             return -1;
         }
+        print_debug("Auth: received confirm, verifying S2...\n");
 
         // Bounds check HSM ID before array index
         if (conf_in.hsm_id >= 8) {
@@ -357,7 +364,6 @@ static int perform_mutual_auth(int is_initiator, auth_challenge_t *pre_read_chal
 int receive(uint16_t pkt_len, uint8_t *buf) {
     receive_command_t *command = (receive_command_t *)buf;
     receive_request_t request;
-    receive_response_t recv_resp;
     msg_type_t cmd;
     uint16_t len_recv_msg;
 
@@ -372,31 +378,41 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
         return -1;
     }
 
-    memset(&recv_resp, 0, sizeof(recv_resp));
+    memset(&current_recv_resp, 0, sizeof(current_recv_resp));
     memset(&request, 0, sizeof(request));
 
     request.slot = command->read_slot;
     memcpy(&request.permissions, &global_permissions,
            sizeof(group_permission_t) * MAX_PERMS);
 
-    write_packet(TRANSFER_INTERFACE, RECEIVE_MSG,
-                 (void *)&request, sizeof(receive_request_t));
+    // request the file from the neighboring device
+    print_debug("Sending request to neighbor\n");
+    if (write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, (void *)&request, sizeof(receive_request_t)) != MSG_OK) {
+        print_error("Failed to send request to neighbor");
+        return -1;
+    }
 
     len_recv_msg = 0xffff;
-    read_packet(TRANSFER_INTERFACE, &cmd, &recv_resp, &len_recv_msg);
+
+    // recieve the response message
+    print_debug("Waiting for neighbor response\n");
+    if (read_packet(TRANSFER_INTERFACE, &cmd, &current_recv_resp, &len_recv_msg) != MSG_OK) {
+        print_error("Failed to receive response from neighbor");
+        return -1;
+    }
     if (cmd != RECEIVE_MSG) {
         print_error("Opcode mismatch");
         return -1;
     }
 
     // check permissions on the received file
-    if (!validate_permission(recv_resp.file.group_id, PERM_RECEIVE)) {
+    if (!validate_permission(current_recv_resp.file.group_id, PERM_RECEIVE)) {
         print_error("Invalid receive permission");
         return -1;
     }
 
     // write that file into the file system
-    if (write_file(command->write_slot, &recv_resp.file, recv_resp.uuid) < 0) {
+    if (write_file(command->write_slot, &current_recv_resp.file, current_recv_resp.uuid) < 0) {
         print_error("Writing received file failed");
         return -1;
     }
@@ -472,7 +488,6 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
     pkt_len_t write_length, read_length;
     list_response_t file_list;
     receive_request_t *command;
-    receive_response_t recv_resp;
     const filesystem_entry_t *metadata;
 
     read_length = sizeof(uart_buf);
@@ -507,14 +522,20 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
         case RECEIVE_MSG:
             command = (receive_request_t *)uart_buf;
 
-            // if this read fails, the other device will not receive a response and
-            // may need to be reset before further testing can occur
-            if (read_file(command->slot, &recv_resp.file) < 0) {
-                print_error("Failed to read file");
-                return -1;
+            {
+                char slot_dbg[32];
+                snprintf(slot_dbg, sizeof(slot_dbg), "Reading slot %d\n", command->slot);
+                print_debug(slot_dbg);
             }
 
-            group_id_t group_id = recv_resp.file.group_id;
+            memset(&current_recv_resp, 0, sizeof(current_recv_resp));
+
+            if (read_file(command->slot, &current_recv_resp.file) < 0) {
+                print_error("Failed to read file");
+                write_packet(TRANSFER_INTERFACE, ERROR_MSG, "read failed", 11);
+                return -1;
+            }
+            group_id_t group_id = current_recv_resp.file.group_id;
 
             // check remote permissions
             bool allowed = false;
@@ -533,19 +554,19 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
                 return -1;
             }
 
-           
             metadata = get_file_metadata(command->slot);
             if (metadata == NULL) {
                 print_error("Getting metadata failed");
+                write_packet(TRANSFER_INTERFACE, ERROR_MSG, "metadata failed", 15);
                 return -1;
             }
 
-            memcpy(&recv_resp.uuid, &metadata->uuid, UUID_SIZE);
+            memcpy(&current_recv_resp.uuid, &metadata->uuid, UUID_SIZE);
 
 
             // send the file to the neighbor hsm
             write_length = sizeof(receive_response_t);
-            write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, &recv_resp, write_length);
+            write_packet(TRANSFER_INTERFACE, RECEIVE_MSG, &current_recv_resp, write_length);
             break;
 
         default:
