@@ -503,9 +503,11 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             return -1;
         }
         // Auth done — now read the actual command packet
+        print_debug("Auth done, waiting for command\n");
         read_length = sizeof(uart_buf);
         memset(uart_buf, 0, sizeof(uart_buf));
-        read_packet(TRANSFER_INTERFACE, &cmd, uart_buf, &read_length);
+        int rp_ret = read_packet(TRANSFER_INTERFACE, &cmd, uart_buf, &read_length);
+        print_debug(rp_ret == MSG_OK ? "Command received OK\n" : "Command read failed\n");
     }
     // If cmd was INTERROGATE_MSG (no auth), fall straight through to switch
 

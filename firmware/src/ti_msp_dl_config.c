@@ -162,7 +162,9 @@ SYSCONFIG_WEAK void SYSCFG_DL_UART_1_init(void)
     DL_UART_Main_setOversampling(UART_1_INST, DL_UART_OVERSAMPLING_RATE_16X);
     DL_UART_Main_setBaudRateDivisor(UART_1_INST, UART_1_IBRD_32_MHZ_115200_BAUD, UART_1_FBRD_32_MHZ_115200_BAUD);
 
-
+    /* Enable RX/TX FIFOs so bytes sent while the CPU is busy (e.g. during RSA)
+     * are buffered rather than dropped by a 1-byte overrun. */
+    DL_UART_Main_enableFIFOs(UART_1_INST);
 
     DL_UART_Main_enable(UART_1_INST);
 }

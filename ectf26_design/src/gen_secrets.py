@@ -18,6 +18,63 @@ import secrets as secrets_module
 from loguru import logger
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import load_der_private_key, load_der_public_key
+
+# Must match bn.h constants
+_WORD_BITS       = 16
+_MAX_PRIME_LEN   = 32   # 512-bit primes as uint16_t words
+_MAX_MODULUS_LEN = 64   # 1024-bit modulus as uint16_t words
+
+def _int_to_dtype(x, length):
+    return [(x >> (_WORD_BITS * (length - 1 - i))) & 0xffff for i in range(length)]
+
+def _montgomery_inv(lsw):
+    return (-pow(lsw, -1, 1 << _WORD_BITS)) % (1 << _WORD_BITS)
+
+def _words_to_bytes(words):
+    out = bytearray()
+    for w in words:
+        out += w.to_bytes(2, 'little')
+    return bytes(out)
+
+def _build_rsa_sk(priv_der):
+    """Return rsa_sk struct bytes from a PKCS#8 DER private key."""
+    key  = load_der_private_key(priv_der, password=None)
+    nums = key.private_numbers()
+    p, q  = nums.p, nums.q
+    d1    = nums.dmp1
+    d2    = nums.dmq1
+    p_inv = pow(p, -1, q)
+    p_mod = (1 << 512) % p
+    q_mod = (1 << 512) % q
+    p0_inv = _montgomery_inv(p & 0xffff)
+    q0_inv = _montgomery_inv(q & 0xffff)
+    words = (
+        _int_to_dtype(p,     _MAX_PRIME_LEN) +
+        _int_to_dtype(q,     _MAX_PRIME_LEN) +
+        _int_to_dtype(d1,    _MAX_PRIME_LEN) +
+        _int_to_dtype(d2,    _MAX_PRIME_LEN) +
+        _int_to_dtype(p_inv, _MAX_PRIME_LEN) +
+        _int_to_dtype(p_mod, _MAX_PRIME_LEN) +
+        _int_to_dtype(q_mod, _MAX_PRIME_LEN) +
+        [p0_inv, q0_inv]
+    )
+    return _words_to_bytes(words)
+
+def _build_rsa_pk(pub_der):
+    """Return rsa_pk struct bytes from a SubjectPublicKeyInfo DER public key."""
+    key  = load_der_public_key(pub_der)
+    nums = key.public_numbers()
+    n, e  = nums.n, nums.e
+    r_mod = (1 << 1024) % n
+    n_inv = _montgomery_inv(n & 0xffff)
+    words = (
+        _int_to_dtype(n,     _MAX_MODULUS_LEN) +
+        _int_to_dtype(e,     _MAX_PRIME_LEN)   +
+        _int_to_dtype(r_mod, _MAX_MODULUS_LEN) +
+        [n_inv]
+    )
+    return _words_to_bytes(words)
 
 
 def gen_secrets(groups: list[int]) -> bytes:
@@ -40,31 +97,32 @@ def gen_secrets(groups: list[int]) -> bytes:
     hsm_devices_private = []
 
     for i in range(8):
-        # 2048-bit keys for the mutual authentication handshake 
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        # 1024-bit keys for the mutual authentication handshake
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
         
-        # Export to DER format [cite: 135]
-        # Hex-encode binary data for JSON compatibility as per the NOTE below
-        priv_hex = private_key.private_bytes(
+        # Export DER then convert to rsa_sk / rsa_pk struct bytes for direct
+        # use by the firmware (no cryptography module needed inside Docker)
+        priv_der = private_key.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
-        ).hex()
-
-        pub_hex = private_key.public_key().public_bytes(
+        )
+        pub_der = private_key.public_key().public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).hex()
+        )
 
-        #store the public keys and ID into global.secrets for use in the firmware
+        priv_struct_hex = _build_rsa_sk(priv_der).hex()
+        pub_struct_hex  = _build_rsa_pk(pub_der).hex()
+
         hsm_devices_public.append({
             "hsm_id": i,
-            "public_key": pub_hex,
+            "public_key": pub_struct_hex,
         })
 
         hsm_devices_private.append({
             "hsm_id": i,
-            "private_key": priv_hex,
+            "private_key": priv_struct_hex,
         })
 
     aes_keys = [secrets_module.token_bytes(16).hex() for _ in range(8)]  # 256-bit AES key for encrypting secrets

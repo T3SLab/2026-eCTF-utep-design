@@ -19,6 +19,9 @@ import json
 import argparse
 import hashlib
 from dataclasses import dataclass
+# rsa_sk / rsa_pk struct sizes in bytes (must match bn.h / rsa_impl.h)
+_RSA_SK_SIZE = 452   # (7 * 32 + 2) * 2
+_RSA_PK_SIZE = 322   # (2 * 64 + 32 + 1) * 2
 
 
 @dataclass
@@ -128,15 +131,15 @@ def secrets_to_c_header(
         f.write(f"// HSM ID for this device\n")
         f.write(f"static const uint16_t HSM_ID = {HSM_ID};\n\n")
         
-        # Write individual Private Key [cite: 78, 81]
+        # Write individual Private Key (already rsa_sk struct bytes from gen_secrets)
         f.write(f"// RSA Private Key for HSM {HSM_ID}\n")
-        f.write(f"static const uint8_t RSA_PRIV_KEY[{len(my_priv_bytes)}] = {{\n")
+        f.write(f"static const uint8_t RSA_PRIV_KEY[{_RSA_SK_SIZE}] = {{\n")
         f.write("  " + ", ".join(hex(b) for b in my_priv_bytes) + "\n")
         f.write("};\n\n")
 
-        # Write Public Key Table [cite: 167]
+        # Write Public Key Table (already rsa_pk struct bytes from gen_secrets)
         f.write("// RSA Public Key Table for verifying other HSMs\n")
-        f.write(f"static const uint8_t RSA_PUB_KEYS[8][294] = {{\n")
+        f.write(f"static const uint8_t RSA_PUB_KEYS[8][{_RSA_PK_SIZE}] = {{\n")
         for pub in all_public_keys:
             f.write(f"    {{ {', '.join(hex(b) for b in pub)} }},\n")
         f.write("};\n\n")

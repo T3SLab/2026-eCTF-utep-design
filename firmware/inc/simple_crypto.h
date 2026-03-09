@@ -28,7 +28,7 @@
 #define HASH_SIZE SHA256_DIGEST_SIZE
 #define GCM_NONCE_SIZE 12
 #define GCM_TAG_SIZE 16
-#define RSA_SIG_SIZE 256
+#define RSA_SIG_SIZE 128
 /******************************** FUNCTION PROTOTYPES ********************************/
 /** @brief Encrypts plaintext using AES-GCM
  *

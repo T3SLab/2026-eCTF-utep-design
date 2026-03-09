@@ -23,6 +23,8 @@ OBJECTS = $(BUILDDIR)/HSM.so \
     $(BUILDDIR)/filesystem.so \
     $(BUILDDIR)/commands.so \
     $(BUILDDIR)/rng.so \
+    $(BUILDDIR)/bn.so \
+    $(BUILDDIR)/rsa_impl.so \
 
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so

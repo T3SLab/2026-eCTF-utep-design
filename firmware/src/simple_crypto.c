@@ -13,8 +13,8 @@
 
 #ifdef CRYPTO_EXAMPLE
 
-// used for the encryption function
 #include "simple_crypto.h"
+#include "rsa_impl.h"
 #include "security.h"
 #include <stdint.h>
 #include <string.h>
@@ -186,101 +186,80 @@ int hmac_sha256(const uint8_t *key, size_t key_len,const uint8_t *data, size_t d
     return ret;
 }
 
-int rsa_sign(const uint8_t *data, size_t data_len,const uint8_t *der_key, size_t der_key_len,uint8_t *sig_out){
-    RsaKey key;
-    WC_RNG rng;
-    word32 idx = 0;
-    uint8_t hash_buf[WC_SHA256_DIGEST_SIZE];
+#define RSA_DTYPE_LEN  MAX_MODULUS_LENGTH   /* 64 uint16_t limbs = 128 bytes */
 
-    int ret;
-
-    /* hash message first */
-    ret = wc_Sha256Hash(data, data_len, hash_buf);
-    if (ret != 0)
-        return ret;
-
-    ret = wc_InitRsaKey(&key, NULL);
-    if (ret != 0)
-        return ret;
-
-    ret = wc_RsaPrivateKeyDecode(der_key, &idx, &key, der_key_len);
-    if (ret != 0) {
-        wc_FreeRsaKey(&key);
-        return ret;
-    }
-
-    ret = wc_InitRng(&rng);
-    if (ret != 0) {
-        wc_FreeRsaKey(&key);
-        return ret;
-    }
-
-    ret = wc_RsaPSS_Sign(
-        hash_buf,
-        WC_SHA256_DIGEST_SIZE,
-        sig_out,
-        RSA_SIG_SIZE,
-        WC_HASH_TYPE_SHA256,
-        WC_MGF1SHA256,
-        &key,
-        &rng
-    );
-
-    wc_FreeRng(&rng);
-    wc_FreeRsaKey(&key);
-
-    return (ret == RSA_SIG_SIZE) ? 0 : ret;
+/* Convert big-endian byte array to big-endian DTYPE array (MSW first) */
+static void bytes_to_dtype(DTYPE *out, const uint8_t *in, size_t n_bytes)
+{
+    size_t i;
+    for (i = 0; i < n_bytes / 2; i++)
+        out[i] = ((uint16_t)in[2*i] << 8) | in[2*i+1];
 }
 
-int rsa_verify(const uint8_t *data, size_t data_len, const uint8_t *sig, const uint8_t *der_key, size_t der_key_len){
-    RsaKey key;
-    word32 idx = 0;
-    uint8_t verify_buf[RSA_SIG_SIZE];
-    uint8_t hash_buf[WC_SHA256_DIGEST_SIZE];
-
-    int ret;
-
-    /* hash message */
-    ret = wc_Sha256Hash(data, data_len, hash_buf);
-    if (ret != 0)
-        return ret;
-
-    ret = wc_InitRsaKey(&key, NULL);
-    if (ret != 0)
-        return ret;
-
-    ret = wc_RsaPublicKeyDecode(der_key, &idx, &key, der_key_len);
-    if (ret != 0) {
-        wc_FreeRsaKey(&key);
-        return ret;
+/* Convert big-endian DTYPE array back to bytes */
+static void dtype_to_bytes(uint8_t *out, const DTYPE *in, size_t n_dtype)
+{
+    size_t i;
+    for (i = 0; i < n_dtype; i++) {
+        out[2*i]   = (uint8_t)(in[i] >> 8);
+        out[2*i+1] = (uint8_t)(in[i] & 0xFF);
     }
+}
 
-    ret = wc_RsaPSS_Verify(
-        sig,
-        RSA_SIG_SIZE,
-        verify_buf,
-        sizeof(verify_buf),
-        WC_HASH_TYPE_SHA256,
-        WC_MGF1SHA256,
-        &key
-    );
+int rsa_sign(const uint8_t *data, size_t data_len, const uint8_t *der_key, size_t der_key_len,
+             uint8_t *sig_out)
+{
+    const rsa_sk *sk = (const rsa_sk *)der_key;
+    uint8_t msg[RSA_SIG_SIZE];
+    DTYPE msg_dtype[RSA_DTYPE_LEN];
+    DTYPE sig_dtype[RSA_DTYPE_LEN];
 
-    if (ret < 0) {
-        wc_FreeRsaKey(&key);
-        return ret;
+    /* Zero-pad data into RSA_SIG_SIZE bytes (data at end, big-endian integer) */
+    memset(msg, 0x00, RSA_SIG_SIZE - data_len);
+    memcpy(msg + RSA_SIG_SIZE - data_len, data, data_len);
+
+    /* Convert message bytes → DTYPE array (MSW first) */
+    bytes_to_dtype(msg_dtype, msg, RSA_SIG_SIZE);
+
+    /* Private-key RSA operation (CRT): sig = msg^d mod n */
+    rsa_decrypt(sig_dtype, RSA_DTYPE_LEN, msg_dtype, RSA_DTYPE_LEN, sk);
+
+    /* Convert signature DTYPE → output bytes */
+    dtype_to_bytes(sig_out, sig_dtype, RSA_DTYPE_LEN);
+
+    return 0;
+}
+
+int rsa_verify(const uint8_t *data, size_t data_len, const uint8_t *sig,
+               const uint8_t *der_key, size_t der_key_len)
+{
+    const rsa_pk *pk = (const rsa_pk *)der_key;
+    uint8_t msg[RSA_SIG_SIZE];
+    DTYPE sig_dtype[RSA_DTYPE_LEN];
+    DTYPE result_dtype[RSA_DTYPE_LEN];
+    uint8_t result[RSA_SIG_SIZE];
+    int i;
+
+    /* Build expected message: zero-padded data */
+    memset(msg, 0x00, RSA_SIG_SIZE - data_len);
+    memcpy(msg + RSA_SIG_SIZE - data_len, data, data_len);
+
+    /* Convert signature bytes → DTYPE */
+    bytes_to_dtype(sig_dtype, sig, RSA_SIG_SIZE);
+
+    /* Public-key RSA operation: m = sig^e mod n */
+    rsa_encrypt(result_dtype, RSA_DTYPE_LEN, sig_dtype, RSA_DTYPE_LEN, pk);
+
+    /* Convert result DTYPE → bytes */
+    dtype_to_bytes(result, result_dtype, RSA_DTYPE_LEN);
+
+    /* Compare recovered message with expected */
+    for (i = 0; i < (int)(RSA_SIG_SIZE - data_len); i++) {
+        if (result[i] != 0x00) return -1;
     }
+    if (memcmp(result + RSA_SIG_SIZE - data_len, data, data_len) != 0) return -1;
 
-    ret = wc_RsaPSS_CheckPadding(
-        hash_buf,
-        WC_SHA256_DIGEST_SIZE,
-        verify_buf,
-        ret,
-        WC_HASH_TYPE_SHA256
-    );
-
-    wc_FreeRsaKey(&key);
-
-    return ret;
+    return 0;
 }
 
 
