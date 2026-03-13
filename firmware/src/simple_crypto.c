@@ -14,7 +14,6 @@
 #ifdef CRYPTO_EXAMPLE
 
 #include "simple_crypto.h"
-#include "rsa_impl.h"
 #include "security.h"
 #include <stdint.h>
 #include <string.h>
@@ -186,80 +185,42 @@ int hmac_sha256(const uint8_t *key, size_t key_len,const uint8_t *data, size_t d
     return ret;
 }
 
-#define RSA_DTYPE_LEN  MAX_MODULUS_LENGTH   /* 64 uint16_t limbs = 128 bytes */
-
-/* Convert big-endian byte array to big-endian DTYPE array (MSW first) */
-static void bytes_to_dtype(DTYPE *out, const uint8_t *in, size_t n_bytes)
+int ed25519_sign(const uint8_t *msg, size_t msg_len, const uint8_t *priv_seed,
+                 const uint8_t *pub_key, uint8_t *sig_out)
 {
-    size_t i;
-    for (i = 0; i < n_bytes / 2; i++)
-        out[i] = ((uint16_t)in[2*i] << 8) | in[2*i+1];
+    ed25519_key key;
+    word32 sig_len = ED25519_SIG_SIZE;
+    int ret;
+
+    ret = wc_ed25519_init(&key);
+    if (ret != 0) return ret;
+
+    ret = wc_ed25519_import_private_key(priv_seed, ED25519_KEY_SIZE,
+                                        pub_key, ED25519_KEY_SIZE, &key);
+    if (ret != 0) { wc_ed25519_free(&key); return ret; }
+
+    ret = wc_ed25519_sign_msg(msg, (word32)msg_len, sig_out, &sig_len, &key);
+    wc_ed25519_free(&key);
+    return ret;
 }
 
-/* Convert big-endian DTYPE array back to bytes */
-static void dtype_to_bytes(uint8_t *out, const DTYPE *in, size_t n_dtype)
+int ed25519_verify(const uint8_t *msg, size_t msg_len, const uint8_t *sig,
+                   const uint8_t *pub_key)
 {
-    size_t i;
-    for (i = 0; i < n_dtype; i++) {
-        out[2*i]   = (uint8_t)(in[i] >> 8);
-        out[2*i+1] = (uint8_t)(in[i] & 0xFF);
-    }
-}
+    ed25519_key key;
+    int ret, verified = 0;
 
-int rsa_sign(const uint8_t *data, size_t data_len, const uint8_t *der_key, size_t der_key_len,
-             uint8_t *sig_out)
-{
-    const rsa_sk *sk = (const rsa_sk *)der_key;
-    uint8_t msg[RSA_SIG_SIZE];
-    DTYPE msg_dtype[RSA_DTYPE_LEN];
-    DTYPE sig_dtype[RSA_DTYPE_LEN];
+    ret = wc_ed25519_init(&key);
+    if (ret != 0) return ret;
 
-    /* Zero-pad data into RSA_SIG_SIZE bytes (data at end, big-endian integer) */
-    memset(msg, 0x00, RSA_SIG_SIZE - data_len);
-    memcpy(msg + RSA_SIG_SIZE - data_len, data, data_len);
+    ret = wc_ed25519_import_public(pub_key, ED25519_KEY_SIZE, &key);
+    if (ret != 0) { wc_ed25519_free(&key); return ret; }
 
-    /* Convert message bytes → DTYPE array (MSW first) */
-    bytes_to_dtype(msg_dtype, msg, RSA_SIG_SIZE);
-
-    /* Private-key RSA operation (CRT): sig = msg^d mod n */
-    rsa_decrypt(sig_dtype, RSA_DTYPE_LEN, msg_dtype, RSA_DTYPE_LEN, sk);
-
-    /* Convert signature DTYPE → output bytes */
-    dtype_to_bytes(sig_out, sig_dtype, RSA_DTYPE_LEN);
-
-    return 0;
-}
-
-int rsa_verify(const uint8_t *data, size_t data_len, const uint8_t *sig,
-               const uint8_t *der_key, size_t der_key_len)
-{
-    const rsa_pk *pk = (const rsa_pk *)der_key;
-    uint8_t msg[RSA_SIG_SIZE];
-    DTYPE sig_dtype[RSA_DTYPE_LEN];
-    DTYPE result_dtype[RSA_DTYPE_LEN];
-    uint8_t result[RSA_SIG_SIZE];
-    int i;
-
-    /* Build expected message: zero-padded data */
-    memset(msg, 0x00, RSA_SIG_SIZE - data_len);
-    memcpy(msg + RSA_SIG_SIZE - data_len, data, data_len);
-
-    /* Convert signature bytes → DTYPE */
-    bytes_to_dtype(sig_dtype, sig, RSA_SIG_SIZE);
-
-    /* Public-key RSA operation: m = sig^e mod n */
-    rsa_encrypt(result_dtype, RSA_DTYPE_LEN, sig_dtype, RSA_DTYPE_LEN, pk);
-
-    /* Convert result DTYPE → bytes */
-    dtype_to_bytes(result, result_dtype, RSA_DTYPE_LEN);
-
-    /* Compare recovered message with expected */
-    for (i = 0; i < (int)(RSA_SIG_SIZE - data_len); i++) {
-        if (result[i] != 0x00) return -1;
-    }
-    if (memcmp(result + RSA_SIG_SIZE - data_len, data, data_len) != 0) return -1;
-
-    return 0;
+    ret = wc_ed25519_verify_msg(sig, ED25519_SIG_SIZE, msg, (word32)msg_len,
+                                &verified, &key);
+    wc_ed25519_free(&key);
+    if (ret != 0) return ret;
+    return verified ? 0 : -1;
 }
 
 

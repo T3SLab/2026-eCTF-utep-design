@@ -23,8 +23,6 @@ OBJECTS = $(BUILDDIR)/HSM.so \
     $(BUILDDIR)/filesystem.so \
     $(BUILDDIR)/commands.so \
     $(BUILDDIR)/rng.so \
-    $(BUILDDIR)/bn.so \
-    $(BUILDDIR)/rsa_impl.so \
 
 ifeq ($(CRYPTO_EXAMPLE), 1)
 OBJECTS += $(BUILDDIR)/simple_crypto.so
@@ -39,35 +37,27 @@ CFLAGS += -DHAVE_AESGCM
 CFLAGS += -DSINGLE_THREADED  # Essential for No-RTOS
 CFLAGS += -DCUSTOM_RAND_GENERATE_BLOCK=trng_generate_block
 
-# SP math backend
-CFLAGS += -DWOLFSSL_SP_MATH_ALL
-CFLAGS += -DSP_WORD_SIZE=32
-
-# RSA-PSS support
-CFLAGS += -DHAVE_RSA
-CFLAGS += -DWC_RSA_PSS
+# Ed25519 support
+CFLAGS += -DHAVE_ED25519
 CFLAGS += -DWOLFSSL_SHA256
-CFLAGS += -DHAVE_PKCS8
-CFLAGS += -DWOLFSSL_KEY_GEN
-CFLAGS += -DWOLFSSL_HAVE_SP_RSA
+CFLAGS += -DWOLFSSL_SHA512
 
 
 # ---> THE CULLING DIET FLAGS <---
 CFLAGS += -DWOLFCRYPT_ONLY
 CFLAGS += -DNO_ERROR_STRINGS
-CFLAGS += -DNO_DH -DNO_DSA         
+CFLAGS += -DNO_RSA
+CFLAGS += -DNO_DH -DNO_DSA
 CFLAGS += -DNO_MD4 -DNO_MD5 -DNO_DES3 -DNO_RC4
 CFLAGS += -DNO_PWDBASED
 CFLAGS += -DGCM_SMALL        
 
 # Hardware Specifics
-CFLAGS += -DHAVE_PK_CALLBACKS
 CFLAGS += -DWOLFSSL_USER_IO
 CFLAGS += -DNO_WRITEV -DTIME_T_NOT_64BIT
 CFLAGS += -DNO_FILESYSTEM
 CFLAGS += -DNO_DEV_RANDOM
 CFLAGS += -DWC_NO_DEFAULT_DEVID
-CFLAGS += -DWOLF_CRYPTO_CB
 
 CFLAGS += -DHAVE_AESGCM
 CFLAGS += -DHAVE_HMAC
@@ -78,16 +68,15 @@ CFLAGS += -I./wolfssl
 
 # Culled Object List (Removed md5.o to save space)
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
-OBJECTS += $(WOLFSSL_INC)/cryptocb.o $(WOLFSSL_INC)/sha256.o
-OBJECTS += $(WOLFSSL_INC)/hmac.o  $(WOLFSSL_INC)/sha.o
-OBJECTS += $(WOLFSSL_INC)/md5.o 
-OBJECTS += $(WOLFSSL_INC)/rsa.o $(WOLFSSL_INC)/random.o
-OBJECTS += $(WOLFSSL_INC)/asn.o 
-OBJECTS += $(WOLFSSL_INC)/sha.o      
-OBJECTS += $(WOLFSSL_INC)/memory.o   
-OBJECTS += $(WOLFSSL_INC)/sp_c32.o
-#OBJECTS += $(WOLFSSL_INC)/integer.o
-OBJECTS += $(WOLFSSL_INC)/sp_int.o
+OBJECTS += $(WOLFSSL_INC)/sha256.o
+OBJECTS += $(WOLFSSL_INC)/hmac.o $(WOLFSSL_INC)/sha.o
+OBJECTS += $(WOLFSSL_INC)/md5.o
+OBJECTS += $(WOLFSSL_INC)/random.o
+OBJECTS += $(WOLFSSL_INC)/memory.o
+OBJECTS += $(WOLFSSL_INC)/sha512.o
+OBJECTS += $(WOLFSSL_INC)/ed25519.o
+OBJECTS += $(WOLFSSL_INC)/ge_operations.o
+OBJECTS += $(WOLFSSL_INC)/fe_operations.o
 endif
 
 NAME = hsm
@@ -144,3 +133,4 @@ clean:
 	@ $(RM) $(OBJECTS) > $(DEVNULL) 2>&1
 	@ $(RM) $(NAME).elf > $(DEVNULL) 2>&1
 	@ $(RM) $(NAME).map > $(DEVNULL) 2>&1
+	@ find $(WOLFSSL_INC) -name "*.o" -delete 2>/dev/null; true

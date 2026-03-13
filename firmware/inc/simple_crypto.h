@@ -19,8 +19,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/hmac.h"
-#include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 
 /******************************** MACRO DEFINITIONS ********************************/
 #define BLOCK_SIZE AES_BLOCK_SIZE
@@ -28,7 +27,8 @@
 #define HASH_SIZE SHA256_DIGEST_SIZE
 #define GCM_NONCE_SIZE 12
 #define GCM_TAG_SIZE 16
-#define RSA_SIG_SIZE 128
+#define ED25519_SIG_SIZE 64
+#define ED25519_KEY_SIZE 32
 /******************************** FUNCTION PROTOTYPES ********************************/
 /** @brief Encrypts plaintext using AES-GCM
  *
@@ -95,8 +95,10 @@ int hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t 
     uint8_t *mac_out);
 
 
-int rsa_sign(const uint8_t *data, size_t data_len, const uint8_t *private_key, size_t key_len, uint8_t *sig_out);
+int ed25519_sign(const uint8_t *msg, size_t msg_len, const uint8_t *priv_seed,
+                 const uint8_t *pub_key, uint8_t *sig_out);
 
-int rsa_verify(const uint8_t *data, size_t data_len, const uint8_t *sig, const uint8_t *public_key, size_t key_len);
+int ed25519_verify(const uint8_t *msg, size_t msg_len, const uint8_t *sig,
+                   const uint8_t *pub_key);
 #endif // ECTF_CRYPTO_H
 #endif // CRYPTO_EXAMPLE

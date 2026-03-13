@@ -105,19 +105,10 @@ typedef struct {
 } read_response_t;
 
 typedef struct {
-    uint8_t challenge[CHALLENGE_SIZE];   // C1
-} auth_challenge_t;
-
-typedef struct {
-    uint8_t sig[RSA_SIG_SIZE];           // S1 = SIGN(privkey2, C1)
-    uint8_t challenge[CHALLENGE_SIZE];   // C2
-    uint8_t hsm_id;                      // HSM2's ID (to look up pubkey)
-} auth_response_t;
-
-typedef struct {
-    uint8_t sig[RSA_SIG_SIZE];           // S2 = SIGN(privkey1, C2)
-    uint8_t hsm_id;                      // HSM1's ID (to look up pubkey)
-} auth_confirm_t;
+    uint8_t hsm_id;                    // listener's ID (to look up pubkey)
+    uint8_t nonce[CHALLENGE_SIZE];     // plaintext nonce
+    uint8_t sig[ED25519_SIG_SIZE];     // SIGN(privkey_listener, nonce)
+} auth_announce_t;
 
 #pragma pack(pop) // Tells the compiler to resume padding struct members
 

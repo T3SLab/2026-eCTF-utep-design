@@ -27,27 +27,15 @@
 #define WOLFSSL_SHA256
 #endif
 
-#ifndef HAVE_RSA
-#define HAVE_RSA
+#ifndef HAVE_ED25519
+#define HAVE_ED25519
 #endif
-#ifndef WC_RSA_PSS
-#define WC_RSA_PSS
-#endif
-#ifndef HAVE_PKCS8
-#define HAVE_PKCS8
-#endif
-#ifndef WOLFSSL_KEY_GEN
-#define WOLFSSL_KEY_GEN
-#endif
-#ifndef WOLFSSL_HAVE_SP_RSA
-#define WOLFSSL_HAVE_SP_RSA
+#ifndef WOLFSSL_SHA512
+#define WOLFSSL_SHA512
 #endif
 
-#ifndef WOLFSSL_SP_MATH_ALL
-#define WOLFSSL_SP_MATH_ALL
-#endif
-#ifndef SP_WORD_SIZE
-#define SP_WORD_SIZE 32
+#ifndef NO_RSA
+#define NO_RSA
 #endif
 
 #ifndef SINGLE_THREADED
@@ -87,9 +75,6 @@
 #define NO_PWDBASED
 #endif
 
-#ifndef HAVE_PK_CALLBACKS
-#define HAVE_PK_CALLBACKS
-#endif
 #ifndef WOLFSSL_USER_IO
 #define WOLFSSL_USER_IO
 #endif
@@ -107,9 +92,6 @@
 #endif
 #ifndef WC_NO_DEFAULT_DEVID
 #define WC_NO_DEFAULT_DEVID
-#endif
-#ifndef WOLF_CRYPTO_CB
-#define WOLF_CRYPTO_CB
 #endif
 
 /* Suppress timing hardening warning — no OS support on bare-metal target */
