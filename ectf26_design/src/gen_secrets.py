@@ -65,11 +65,6 @@ def gen_secrets(groups: list[int]) -> bytes:
 
     aes_keys = [secrets_module.token_bytes(16).hex() for _ in range(8)]  # 256-bit AES key for encrypting secrets
     
-    # Store private keys in host only file
-    host_keys = {"hsm_devices": hsm_devices_private}
-    with open("host_keys.json", "w") as f:
-        json.dump(host_keys, f, indent=2) 
-
     # Create the secrets object
     # You can change this to generate any secret material
     # The secrets file will never be shared with attackers [cite: 117]
@@ -80,11 +75,13 @@ def gen_secrets(groups: list[int]) -> bytes:
         "some_secrets": "EXAMPLE",
     }
 
+    host_keys = {"hsm_devices": hsm_devices_private}
+
     # NOTE: if you choose to use JSON for your file type, you will not
     # be able to store binary data, and must either use a different file
     # type or encode the binary data to hex, base64, or another type of
     # ASCII-only encoding
-    return json.dumps(secrets).encode()
+    return json.dumps(secrets).encode(), host_keys
 
 
 def parse_args():
@@ -119,7 +116,7 @@ def main():
     # Parse the command line arguments
     args = parse_args()
 
-    secrets = gen_secrets(args.groups)
+    secrets, host_keys = gen_secrets(args.groups)
 
     # Print the generated secrets for your own debugging
     # Attackers will NOT have access to the output of this, but feel free to remove
@@ -132,8 +129,14 @@ def main():
         # Dump the secrets to the file
         f.write(secrets)
 
+    # Write host_keys.json alongside the secrets file so the path is always writable
+    host_keys_path = args.secrets_file.parent / "host_keys.json"
+    with open(host_keys_path, "w") as f:
+        json.dump(host_keys, f, indent=2)
+
     # For your own debugging. Feel free to remove
     logger.success(f"Wrote secrets to {str(args.secrets_file.absolute())}")
+    logger.success(f"Wrote host keys to {str(host_keys_path.absolute())}")
 
 
 if __name__ == "__main__":
