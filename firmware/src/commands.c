@@ -81,15 +81,15 @@ int list(uint16_t pkt_len, uint8_t *buf) {
     list_command_t *command = (list_command_t*)buf;
     list_response_t file_list;
 
+    if (!check_pin(command->pin)) {
+        print_error("Invalid pin");
+        return -1;
+    }
+
     memset(&file_list, 0, sizeof(file_list));
 
     // copy relevant fields into the final struct
     generate_list_files(&file_list);
-
-    if (!check_pin(command->pin)) {
-        print_error("Invalid pin,");
-        return -1;
-    }
 
     // write success packet with list
     pkt_len_t length = LIST_PKT_LEN(file_list.n_files);
@@ -114,7 +114,12 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     // Extract what we need from the incoming command
     read_command_t *command = (read_command_t*)buf;
     uint16_t target_slot = command->slot; // Save this before we overwrite buf!
-    
+
+    if (target_slot >= MAX_FILE_COUNT) {
+        print_error("Invalid slot");
+        return -1;
+    }
+
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
         return -1;
@@ -136,9 +141,10 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     memset(resp, 0, sizeof(read_response_t));
 
     // Decrypt from current_file into the freshly cleared UART buffer
-    if (decrypt_sym(current_file.contents, current_file.contents_len, 
-                    AES_KEY_TABLE[target_slot], current_file.nonce, 
+    if (decrypt_sym(current_file.contents, current_file.contents_len,
+                    AES_KEY_TABLE[target_slot], current_file.nonce,
                     resp->contents, current_file.tag) != 0) {
+        delay_ms(4000);
         print_error("Decryption failed");
         return -1;
     }
@@ -183,6 +189,11 @@ int write(uint16_t pkt_len, uint8_t *buf) {
 
     if (command->contents_len > MAX_CONTENTS_SIZE) {
         print_error("File too large");
+        return -1;
+    }
+
+    if (command->slot >= MAX_FILE_COUNT) {
+        print_error("Invalid slot");
         return -1;
     }
 
@@ -237,6 +248,11 @@ static int perform_auth(int is_listener)
     int             ret;
 
     if (is_listener) {
+        if (HSM_ID >= 8) {
+            print_error("Auth: invalid local HSM ID\n");
+            return -1;
+        }
+
         ann.hsm_id = HSM_ID;
         generate_nonce(ann.nonce, CHALLENGE_SIZE);
 
@@ -291,6 +307,11 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
 
     if (!check_pin(command->pin)) {
         print_error("Invalid pin");
+        return -1;
+    }
+
+    if (command->read_slot >= MAX_FILE_COUNT || command->write_slot >= MAX_FILE_COUNT) {
+        print_error("Invalid slot");
         return -1;
     }
 
@@ -368,9 +389,16 @@ int interrogate(uint16_t pkt_len, uint8_t *buf) {
     len_recv_msg = 0xffff;
 
     // recieve the response message
-    read_packet(TRANSFER_INTERFACE, &cmd, &final_list_buf, &len_recv_msg);
+    if (read_packet(TRANSFER_INTERFACE, &cmd, &final_list_buf, &len_recv_msg) != MSG_OK) {
+        print_error("Failed to receive interrogate response");
+        return -1;
+    }
     if (cmd != INTERROGATE_MSG) {
         print_error("Opcode mismatch");
+        return -1;
+    }
+    if (final_list_buf.n_files > MAX_FILE_COUNT) {
+        print_error("Neighbor sent invalid file count");
         return -1;
     }
 

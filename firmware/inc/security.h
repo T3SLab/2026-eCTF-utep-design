@@ -32,6 +32,12 @@ typedef struct {
     bool receive;
 } group_permission_t;
 
+/** @brief Delay for a given number of milliseconds
+ *
+ *  @param ms Number of milliseconds to delay.
+*/
+void delay_ms(uint32_t ms);
+
 /** @brief Validate a pin against the HSM's pin
  *
  *  @param pin Requested pin to validate.

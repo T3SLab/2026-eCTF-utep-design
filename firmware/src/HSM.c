@@ -28,59 +28,11 @@
 #include "secrets.h"
 
 
-/* Code between this #ifdef and the subsequent #endif will
-*  be ignored by the compiler if CRYPTO_EXAMPLE is not set in
-*  the Makefile. */
-#ifdef CRYPTO_EXAMPLE
-/* The simple crypto example included with the reference design is
-*  intended to be an example of how you *may* use cryptography in your
-*  design. You are not limited nor required to use this interface in
-*  your design. It is recommended for newer teams to start by only using
-*  the simple crypto library until they have a working design. */
-#include "simple_crypto.h"
-#endif  //CRYPTO_EXAMPLE
-
 /**********************************************************
  ************************ GLOBALS *************************
  **********************************************************/
 
 static unsigned char uart_buf[MAX_MSG_SIZE];
-
-
-/**********************************************************
- ******************** HELPER FUNCTIONS ********************
- **********************************************************/
-
-
-
-/* Code between this #ifdef and the subsequent #endif will
-*  be ignored by the compiler if CRYPTO_EXAMPLE is not set in
-*  the projectk.mk file. */
-#ifdef CRYPTO_EXAMPLE
-void crypto_example(void) {
-    uint8_t nonce[32];
-    uint8_t sig[ED25519_SIG_SIZE];
-    int ret;
-
-    print_debug("Ed25519 cycle start\n");
-
-    generate_nonce(nonce, sizeof(nonce));
-
-    ret = ed25519_sign(nonce, sizeof(nonce), ED25519_PRIV_KEY, ED25519_PUB_KEYS[HSM_ID], sig);
-    if (ret != 0) {
-        print_error("Ed25519 sign failed\n");
-        return;
-    }
-
-    ret = ed25519_verify(nonce, sizeof(nonce), sig, ED25519_PUB_KEYS[HSM_ID]);
-    if (ret != 0) {
-        print_error("Ed25519 verify failed\n");
-        return;
-    }
-
-    print_debug("Ed25519 cycle end\n");
-}
-#endif  //CRYPTO_EXAMPLE
 
 /**********************************************************
  ********************* CORE FUNCTIONS *********************

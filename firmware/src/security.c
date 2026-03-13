@@ -32,10 +32,12 @@ bool check_pin(unsigned char* pin) {
     }
     else{
         uint8_t mac_out[32];
-        
+
         hmac_sha256(HMAC_KEY, 32, pin, PIN_LENGTH, mac_out);
 
-        return memcmp(mac_out, HSMPIN_HMAC, 32) == 0;
+        bool correct = memcmp(mac_out, HSMPIN_HMAC, 32) == 0;
+        if (!correct) delay_ms(4000);
+        return correct;
     }
 }
 bool validate_permission(uint16_t group_id, permission_enum_t perm) {
@@ -44,24 +46,20 @@ bool validate_permission(uint16_t group_id, permission_enum_t perm) {
     sprintf(output_buf, "Checking %c permissions for group: %hx\n", perm, group_id);
     print_debug(output_buf);
 
-    bool found = false;
     for (int i = 0; i < MAX_PERMS; i++) {
-        bool match = (global_permissions[i].group_id == group_id);
-        if(match){
-            found = true;
+        if (global_permissions[i].group_id == group_id) {
+            bool granted;
             switch (perm) {
-                case PERM_READ:
-                    return global_permissions[i].read;
-                case PERM_WRITE:
-                    return global_permissions[i].write;
-                case PERM_RECEIVE:
-                    return global_permissions[i].receive;
-                default:
-                    return false; // Invalid permission type
+                case PERM_READ:    granted = global_permissions[i].read;    break;
+                case PERM_WRITE:   granted = global_permissions[i].write;   break;
+                case PERM_RECEIVE: granted = global_permissions[i].receive; break;
+                default:           granted = false;                          break;
             }
-      
+            if (!granted) delay_ms(4000);
+            return granted;
         }
     }
+    delay_ms(4000);
     return false;
 }
 

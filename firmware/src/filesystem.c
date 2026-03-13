@@ -42,6 +42,7 @@ int init_fs() {
  * @return True if the slot is in use. False otherwise.
 */
 bool is_slot_in_use(slot_t slot) {
+    if (slot >= MAX_FILE_COUNT) return false;
     uint32_t in_use;
     unsigned int flash_addr = FILE_ALLOCATION_TABLE[slot].flash_addr;
     if ((int)flash_addr < 0) return false;
@@ -55,7 +56,6 @@ bool is_slot_in_use(slot_t slot) {
  *
  * @return 0 upon success. A negative value otherwise.
 */
-// TODO: This function looks like it has a serious buffer overflow vulnerability. Fix it.
 int create_file(
     file_t *dest,
     group_id_t group_id,
@@ -70,7 +70,8 @@ int create_file(
     dest->contents_len = contents_len;
 
     // name must be null terminated, and the contents are defined by a length
-    strcpy(dest->name, name);
+    strncpy(dest->name, name, MAX_NAME_SIZE - 1);
+    dest->name[MAX_NAME_SIZE - 1] = '\0';
 
     //only copy the contents if the pointer is not null
     if (contents != NULL && contents_len > 0) {
@@ -88,6 +89,7 @@ int create_file(
  * @return 0 upon success. A negative value otherwise.
 */
 int write_file(slot_t slot, file_t *src, uint8_t *uuid) {
+    if (slot >= MAX_FILE_COUNT) return -1;
     unsigned int length, flash_addr;
 
     flash_addr = FILE_START_PAGE_FROM_SLOT(slot);
@@ -125,6 +127,7 @@ int write_file(slot_t slot, file_t *src, uint8_t *uuid) {
  * @return 0 upon success. A negative value otherwise.
 */
 int read_file(slot_t slot, file_t *dest) {
+    if (slot >= MAX_FILE_COUNT) return -1;
 
     int flash_addr, file_size;
 
@@ -151,5 +154,6 @@ int read_file(slot_t slot, file_t *dest) {
  * @return A filesystem_entry_t * on success. NULL on error.
 */
 const filesystem_entry_t *get_file_metadata(slot_t slot) {
+    if (slot >= MAX_FILE_COUNT) return NULL;
     return &FILE_ALLOCATION_TABLE[slot];
 }
