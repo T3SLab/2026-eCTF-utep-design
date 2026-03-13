@@ -1,0 +1,34 @@
+{
+  "hsm_devices": [
+    {
+      "hsm_id": 2,
+      "private_key": "0c2a4390f53a232c006850db6c041aa6862c6b17f223928da14f83ece0753a9d",
+      "public_key": "9b5b1cf802ea0fe6776ca739f58e7002f8d66a93ae75e988c2c4e30b0e4f36c3"
+    },
+    {
+      "hsm_id": 3,
+      "private_key": "cfc7fb34ae9c10c15e16a03947694d0bcdfa6c039d9437c9771c5375c9ded963",
+      "public_key": "3975f1098efff5f514d0fc798929e2e259e9127c5e7a9a7144a15c83aaa28159"
+    },
+    {
+      "hsm_id": 4,
+      "private_key": "7f077c3adbe15d40050d4d9253427b60653dd71598d1ecf48f7324d231701783",
+      "public_key": "b40928864e6df189d1ac68b34c6001503f7e384db7f5980adccde538a92629af"
+    },
+    {
+      "hsm_id": 5,
+      "private_key": "48fe958dedf23480fcf669545e88111e064ec4047f7a4e510dfb9a79c8d7b73b",
+      "public_key": "fcfe3d8b246ca7b5e88eb749e0ce35271a4c87fad795267bcf3d49e11a229cc8"
+    },
+    {
+      "hsm_id": 6,
+      "private_key": "710a382d18cd269ff9ff8e09fe5e37322afd8cb0d2def09772a453d37e8480fe",
+      "public_key": "dde69023a89bac052038dce9ab6159354535d6a51b8f6e33762c3162631e6ffa"
+    },
+    {
+      "hsm_id": 7,
+      "private_key": "f79ddae468a6cedf9b6372759cb2fc0cb5780aa869b6aed2e20fd296c99d3dab",
+      "public_key": "234d0d3e43489026d465c8ad441bb7fcb4131d6f53aa4803f01dac56a222650e"
+    }
+  ]
+}

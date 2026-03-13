@@ -11,7 +11,7 @@
  * @copyright Copyright (c) 2026 The MITRE Corporation
  */
 
-#if CRYPTO_EXAMPLE
+#ifdef CRYPTO_EXAMPLE
 #ifndef ECTF_CRYPTO_H
 #define ECTF_CRYPTO_H
 
@@ -19,42 +19,56 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/hmac.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 
 /******************************** MACRO DEFINITIONS ********************************/
 #define BLOCK_SIZE AES_BLOCK_SIZE
 #define KEY_SIZE 16
 #define HASH_SIZE SHA256_DIGEST_SIZE
-
+#define GCM_NONCE_SIZE 12
+#define GCM_TAG_SIZE 16
+#define ED25519_SIG_SIZE 64
+#define ED25519_KEY_SIZE 32
 /******************************** FUNCTION PROTOTYPES ********************************/
-/** @brief Encrypts plaintext using a symmetric cipher
+/** @brief Encrypts plaintext using AES-GCM
  *
  * @param plaintext A pointer to a buffer of length len containing the
  *          plaintext to encrypt
- * @param len The length of the plaintext to encrypt. Must be a multiple of
- *          BLOCK_SIZE (16 bytes)
+ * @param len The length of the plaintext to encrypt. Does NOT need to be
+ *          a multiple of BLOCK_SIZE
  * @param key A pointer to a buffer of length KEY_SIZE (16 bytes) containing
  *          the key to use for encryption
+ * @param nonce A pointer to a buffer of length GCM_NONCE_SIZE (12 bytes)
+ *          containing a unique nonce for this encryption
  * @param ciphertext A pointer to a buffer of length len where the resulting
  *          ciphertext will be written to
+ * @param auth_tag A pointer to a buffer of length GCM_TAG_SIZE (16 bytes)
+ *          where the authentication tag will be written to
  *
- * @return 0 on success, -1 on bad length, other non-zero for other error
+ * @return 0 on success, non-zero for other error
  */
-int encrypt_sym(uint8_t *plaintext, size_t len, uint8_t *key, uint8_t *ciphertext);
+int encrypt_sym(uint8_t *plaintext, size_t len, const uint8_t *key, uint8_t *nonce,
+                uint8_t *ciphertext, uint8_t *auth_tag);
 
-/** @brief Decrypts ciphertext using a symmetric cipher
+/** @brief Decrypts ciphertext using AES-GCM and verifies the authentication tag
  *
  * @param ciphertext A pointer to a buffer of length len containing the
  *           ciphertext to decrypt
- * @param len The length of the ciphertext to decrypt. Must be a multiple of
- *           BLOCK_SIZE (16 bytes)
+ * @param len The length of the ciphertext to decrypt. Does NOT need to be
+ *           a multiple of BLOCK_SIZE
  * @param key A pointer to a buffer of length KEY_SIZE (16 bytes) containing
  *           the key to use for decryption
+ * @param nonce A pointer to a buffer of length GCM_NONCE_SIZE (12 bytes)
+ *           containing the same nonce used during encryption
  * @param plaintext A pointer to a buffer of length len where the resulting
  *           plaintext will be written to
+ * @param auth_tag A pointer to a buffer of length GCM_TAG_SIZE (16 bytes)
+ *           containing the authentication tag to verify against
  *
- * @return 0 on success, -1 on bad length, other non-zero for other error
+ * @return 0 on success, non-zero for other error (including tag mismatch)
  */
-int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *plaintext);
+int decrypt_sym(uint8_t *ciphertext, size_t len, const uint8_t *key, uint8_t *nonce,
+                uint8_t *plaintext, uint8_t *auth_tag);
 
 /** @brief Hashes arbitrary-length data
  *
@@ -81,5 +95,10 @@ int hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t 
     uint8_t *mac_out);
 
 
-#endif // CRYPTO_EXAMPLE
+int ed25519_sign(const uint8_t *msg, size_t msg_len, const uint8_t *priv_seed,
+                 const uint8_t *pub_key, uint8_t *sig_out);
+
+int ed25519_verify(const uint8_t *msg, size_t msg_len, const uint8_t *sig,
+                   const uint8_t *pub_key);
 #endif // ECTF_CRYPTO_H
+#endif // CRYPTO_EXAMPLE

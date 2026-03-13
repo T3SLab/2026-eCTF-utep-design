@@ -15,6 +15,7 @@
 #define __FILESYSTEM__
 
 #include <stdbool.h>
+#include <stddef.h>
 #include "simple_flash.h"
 
 // #include "commands.h"
@@ -37,6 +38,8 @@ typedef uint16_t group_id_t;
 #define MAX_FILE_COUNT 8
 #define MAX_NAME_SIZE 32
 #define MAX_CONTENTS_SIZE 8192
+#define NONCE_SIZE 12
+#define TAG_SIZE 16
 
 // _FLASH_FAT_START is defined by the functional specs to be the start of where the FAT
 // will be stored. It is address 0x0003a000, the last flash page. Your team may NOT
@@ -63,38 +66,42 @@ static filesystem_entry_t FILE_ALLOCATION_TABLE[MAX_FILE_COUNT];
 
 
 /*
-The reference design allocates files for each slot as follows:
-0: 0x10000-0x12400
-1: 0x12400-0x14800
-2: 0x14800-0x16c00
-3: 0x16c00-0x19000
-4: 0x19000-0x1b400
-5: 0x1b400-0x1d800
-6: 0x1d800-0x1fc00
-7: 0x1fc00-0x22000
+File slots (FILES_START_ADDR=0x28000, 9 pages × 1024 bytes each):
+0: 0x28000-0x2a400
+1: 0x2a400-0x2c800
+2: 0x2c800-0x2ec00
+3: 0x2ec00-0x31000
+4: 0x31000-0x33400
+5: 0x33400-0x35800
+6: 0x35800-0x37c00
+7: 0x37c00-0x3a000  (ends exactly at FAT)
 */
 // Calculate the flash address for a given file slot. 9 pages are allocated for each
 // file.
 #define FILE_START_PAGE_FROM_SLOT(slot) FILES_START_ADDR + (STORED_FILE_SIZE*slot)
 
-// Calculate the total size of a file in flash, including its metadata
-#define FILE_TOTAL_SIZE(len) len + offsetof(file_t, contents)
+// Calculate the total size of a file in flash, including its metadata.
+// nonce and tag precede contents, so only the used portion of contents needs writing.
+#define FILE_TOTAL_SIZE(len) (offsetof(file_t, contents) + (len))
 
 // Each file will be 9 pages in size. 8 pages for the file contents + 1 page for
 // metadata
 #define FILE_PAGE_COUNT 9
 #define STORED_FILE_SIZE FLASH_PAGE_SIZE*FILE_PAGE_COUNT
 
-// first flash address for files
-#define FILES_START_ADDR 0x10000
+// first flash address for files — placed at end of APP1 just before FAT
+// 8 slots × 9216 bytes = 0x12000, so files occupy 0x28000–0x39FFF
+#define FILES_START_ADDR 0x28000
 
 #define FILE_IN_USE 0xdeadbeef
 // used to actually define the file object
 typedef struct {
-    uint32_t in_use;  // FILE_IN_USE if in use
+    uint32_t in_use;
     group_id_t group_id;
     char name[MAX_NAME_SIZE];
     uint16_t contents_len;
+    uint8_t nonce[NONCE_SIZE];
+    uint8_t tag[TAG_SIZE];
     uint8_t contents[MAX_CONTENTS_SIZE];
 } file_t;
 

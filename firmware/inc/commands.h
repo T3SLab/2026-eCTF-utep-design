@@ -19,6 +19,7 @@
 #include "simple_flash.h"
 #include "filesystem.h"
 #include "secrets.h"
+#include "simple_crypto.h"
 
 #define pkt_len_t uint16_t
 
@@ -26,6 +27,8 @@
 typedef unsigned char pin_t[6];
 
 #define MAX_MSG_SIZE sizeof(write_command_t)
+
+#define CHALLENGE_SIZE 32
 
 // calculates the length of a list packet based on the number of files listed
 #define LIST_PKT_LEN(num_files) (sizeof(num_files) + ((MAX_NAME_SIZE + sizeof(group_id_t) + sizeof(slot_t)) * num_files))
@@ -100,6 +103,12 @@ typedef struct {
     char name[MAX_NAME_SIZE];
     uint8_t contents[MAX_CONTENTS_SIZE];
 } read_response_t;
+
+typedef struct {
+    uint8_t hsm_id;                    // listener's ID (to look up pubkey)
+    uint8_t nonce[CHALLENGE_SIZE];     // plaintext nonce
+    uint8_t sig[ED25519_SIG_SIZE];     // SIGN(privkey_listener, nonce)
+} auth_announce_t;
 
 #pragma pack(pop) // Tells the compiler to resume padding struct members
 

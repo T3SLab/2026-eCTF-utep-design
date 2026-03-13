@@ -42,8 +42,11 @@ int init_fs() {
  * @return True if the slot is in use. False otherwise.
 */
 bool is_slot_in_use(slot_t slot) {
-    file_t temp_file;
-    return (!read_file(slot, &temp_file) && temp_file.in_use == FILE_IN_USE);
+    uint32_t in_use;
+    unsigned int flash_addr = FILE_ALLOCATION_TABLE[slot].flash_addr;
+    if ((int)flash_addr < 0) return false;
+    flash_simple_read(flash_addr, &in_use, sizeof(in_use));
+    return in_use == FILE_IN_USE;
 }
 
 /** @brief Create a new file object in memory
@@ -67,10 +70,12 @@ int create_file(
     dest->contents_len = contents_len;
 
     // name must be null terminated, and the contents are defined by a length
-    strncpy(dest->name, name, 32);
-    dest->name[31] = '\0';
-    memcpy(dest->contents, contents, contents_len);
+    strcpy(dest->name, name);
 
+    //only copy the contents if the pointer is not null
+    if (contents != NULL && contents_len > 0) {
+        memcpy(dest->contents, contents, contents_len);
+    }
     return 0;
 }
 
@@ -98,8 +103,18 @@ int write_file(slot_t slot, file_t *src, uint8_t *uuid) {
         flash_simple_erase_page(flash_addr + (FLASH_PAGE_SIZE * i));
     }
 
-    // now write the file
-    return flash_simple_write(FILE_ALLOCATION_TABLE[slot].flash_addr, src, length);
+    // write the file one page at a time so each call stays within one sector
+    uint8_t *src_bytes = (uint8_t *)src;
+    unsigned int remaining = length;
+    unsigned int offset = 0;
+    while (remaining > 0) {
+        unsigned int chunk = (remaining > FLASH_PAGE_SIZE) ? FLASH_PAGE_SIZE : remaining;
+        int ret = flash_simple_write(flash_addr + offset, src_bytes + offset, chunk);
+        if (ret < 0) return ret;
+        offset += chunk;
+        remaining -= chunk;
+    }
+    return 0;
 }
 
 /** @brief Read a file from persistent storage into memory
@@ -110,13 +125,20 @@ int write_file(slot_t slot, file_t *src, uint8_t *uuid) {
  * @return 0 upon success. A negative value otherwise.
 */
 int read_file(slot_t slot, file_t *dest) {
+
     int flash_addr, file_size;
 
     flash_addr = FILE_ALLOCATION_TABLE[slot].flash_addr;
-    file_size = FILE_ALLOCATION_TABLE[slot].length;
-    if (flash_addr < 0 || file_size < 0) {
+    file_size  = FILE_ALLOCATION_TABLE[slot].length;
+
+    if (flash_addr == 0 || file_size == 0)
         return -1;
-    }
+
+    if (file_size > sizeof(file_t))
+        return -1;
+
+    memset(dest, 0, sizeof(file_t));
+
     flash_simple_read(flash_addr, dest, file_size);
 
     return 0;

@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <strings.h>
 #include "rng.h"
 #include "simple_flash.h"
 #include "host_messaging.h"
@@ -25,6 +25,8 @@
 #include "ti_msp_dl_config.h"
 #include "status_led.h"
 #include "simple_uart.h"
+#include "secrets.h"
+
 
 /* Code between this #ifdef and the subsequent #endif will
 *  be ignored by the compiler if CRYPTO_EXAMPLE is not set in
@@ -56,48 +58,27 @@ static unsigned char uart_buf[MAX_MSG_SIZE];
 *  the projectk.mk file. */
 #ifdef CRYPTO_EXAMPLE
 void crypto_example(void) {
-    // Example of how to utilize included simple_crypto.h
+    uint8_t nonce[32];
+    uint8_t sig[ED25519_SIG_SIZE];
+    int ret;
 
-    // This string is 16 bytes long including null terminator
-    // This is the block size of included symmetric encryption
-    char *data = "Crypto Example!";
-    uint8_t ciphertext[BLOCK_SIZE];
-    uint8_t key[KEY_SIZE];
-    uint8_t hash_out[HASH_SIZE];
-    uint8_t decrypted[BLOCK_SIZE];
-    uint8_t nonce [32];
+    print_debug("Ed25519 cycle start\n");
 
-    char output_buf[128] = {0};
+    generate_nonce(nonce, sizeof(nonce));
 
-    // Zero out the key
-    bzero(key, BLOCK_SIZE);
+    ret = ed25519_sign(nonce, sizeof(nonce), ED25519_PRIV_KEY, ED25519_PUB_KEYS[HSM_ID], sig);
+    if (ret != 0) {
+        print_error("Ed25519 sign failed\n");
+        return;
+    }
 
-    // Encrypt example data and print out
-    encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext);
-    print_debug("Encrypted data: \n");
-    print_hex_debug(ciphertext, BLOCK_SIZE);
+    ret = ed25519_verify(nonce, sizeof(nonce), sig, ED25519_PUB_KEYS[HSM_ID]);
+    if (ret != 0) {
+        print_error("Ed25519 verify failed\n");
+        return;
+    }
 
-    // Hash example encryption results
-    hash(ciphertext, BLOCK_SIZE, hash_out);
-
-    // Output hash result
-    print_debug("Hash result: \n");
-    print_hex_debug(hash_out, HASH_SIZE);
-
-    // Decrypt the encrypted message and print out
-    decrypt_sym(ciphertext, BLOCK_SIZE, key, decrypted);
-    sprintf(output_buf, "Decrypted message: %s\n", decrypted);
-
-    print_debug(output_buf);
-
-    generate_nonce(nonce, 32);
-    print_debug("Generated Nonce: \n");
-    print_hex_debug(nonce, 32);
-
-    print_debug("test delay start\n");
-    delay_ms(4000);
-    print_debug("test delay end\n");
-
+    print_debug("Ed25519 cycle end\n");
 }
 #endif  //CRYPTO_EXAMPLE
 
@@ -112,8 +93,8 @@ void init() {
     // Initialize all of the hardware components
     SYSCFG_DL_init();
 
-    rng_init();
 
+    rng_init();
     init_fs();
 }
 
@@ -164,13 +145,6 @@ int main(void) {
 
         // Handle list command
         case LIST_MSG:
-
-#ifdef CRYPTO_EXAMPLE
-            // Run the crypto example
-            // TODO: Remove this from your design
-            crypto_example();
-#endif // CRYPTO_EXAMPLE
-
             STATUS_LED_OFF();
             list(pkt_len, uart_buf);
             break;

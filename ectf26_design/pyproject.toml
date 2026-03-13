@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 secrets = "gen_secrets:main"
+hsm-assign = "hsm_key_assigner:main"
 
 
 [tool.black]

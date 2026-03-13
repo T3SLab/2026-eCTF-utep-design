@@ -26,3 +26,5 @@ uint32_t trng_get_word(void);
  * @param len The length of the nonce to be generated, in bytes.
  */
 void generate_nonce(uint8_t *out, size_t len);
+
+int trng_generate_block(unsigned char *output, unsigned int sz);
