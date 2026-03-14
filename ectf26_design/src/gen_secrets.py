@@ -56,12 +56,6 @@ def _generate_key_material():
     return hsm_devices_public, hsm_devices_private, aes_keys
 
 
-# Side-channel storage populated by gen_secrets so that main() can write
-# host_keys.json with private keys that match the public keys in the secrets bytes.
-# Private keys are never included in the secrets bytes themselves.
-_host_keys_sidecar: dict | None = None
-
-
 def gen_secrets(groups: list[int]) -> bytes:
     """Generate the contents secrets file
 
@@ -77,11 +71,18 @@ def gen_secrets(groups: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
-    global _host_keys_sidecar
     hsm_devices_public, hsm_devices_private, aes_keys = _generate_key_material()
 
-    # Stash private keys for main() to write to host_keys.json
-    _host_keys_sidecar = {"hsm_devices": hsm_devices_private}
+    # Write host_keys.json to /secrets/ so the firmware build can assign
+    # one private key per HSM without exposing all keys in secrets.h.
+    # /secrets/ is always mounted by MITRE's pipeline before this is called.
+    host_keys_path = Path("/secrets/host_keys.json")
+    try:
+        with open(host_keys_path, "w") as f:
+            json.dump({"hsm_devices": hsm_devices_private}, f, indent=2)
+    except OSError:
+        # /secrets/ may not exist in local dev environments; main() handles that case.
+        pass
 
     # Create the secrets object
     # You can change this to generate any secret material
@@ -90,7 +91,6 @@ def gen_secrets(groups: list[int]) -> bytes:
         "groups": groups,
         "hsm_devices": hsm_devices_public,
         "aes_keys": aes_keys,
-        "some_secrets": "EXAMPLE",
     }
 
     # NOTE: if you choose to use JSON for your file type, you will not
@@ -145,15 +145,8 @@ def main():
         # Dump the secrets to the file
         f.write(secrets)
 
-    # Write host_keys.json alongside the secrets file so the path is always writable.
-    # Private keys were stashed in _host_keys_sidecar by gen_secrets above.
-    host_keys_path = args.secrets_file.parent / "host_keys.json"
-    with open(host_keys_path, "w") as f:
-        json.dump(_host_keys_sidecar, f, indent=2)
-
     # For your own debugging. Feel free to remove
     logger.success(f"Wrote secrets to {str(args.secrets_file.absolute())}")
-    logger.success(f"Wrote host keys to {str(host_keys_path.absolute())}")
 
 
 if __name__ == "__main__":
