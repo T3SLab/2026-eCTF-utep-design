@@ -337,4 +337,5 @@ wolfssl/
 *.secrets
 *.secrets.txt
 **/secrets.h
+host_keys.json
 uv.lock
