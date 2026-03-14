@@ -73,23 +73,13 @@ def gen_secrets(groups: list[int]) -> bytes:
     """
     hsm_devices_public, hsm_devices_private, aes_keys = _generate_key_material()
 
-    # Write host_keys.json to /secrets/ so the firmware build can assign
-    # one private key per HSM without exposing all keys in secrets.h.
-    # /secrets/ is always mounted by MITRE's pipeline before this is called.
-    host_keys_path = Path("/secrets/host_keys.json")
-    try:
-        with open(host_keys_path, "w") as f:
-            json.dump({"hsm_devices": hsm_devices_private}, f, indent=2)
-    except OSError:
-        # /secrets/ may not exist in local dev environments; main() handles that case.
-        pass
-
     # Create the secrets object
     # You can change this to generate any secret material
     # The secrets file will never be shared with attackers [cite: 117]
     secrets = {
         "groups": groups,
         "hsm_devices": hsm_devices_public,
+        "hsm_devices_private": hsm_devices_private,
         "aes_keys": aes_keys,
     }
 

@@ -98,10 +98,26 @@ def secrets_to_c_header(
 
     host_keys_path = "/secrets/host_keys.json"
 
-    with open(host_keys_path, "r") as f:
-        host_keys = json.load(f)
+    # Bootstrap host_keys.json from the secrets file on the first firmware build.
+    # The secrets file is read-only after creation; host_keys.json is the mutable
+    # queue that tracks which private key has been assigned to each HSM.
+    devices = []
+    if os.path.isfile(host_keys_path):
+        try:
+            with open(host_keys_path, "r") as f:
+                host_keys = json.load(f)
+            devices = host_keys.get("hsm_devices", [])
+        except (json.JSONDecodeError, ValueError):
+            pass
 
-    devices = host_keys.get("hsm_devices", [])
+    if not devices:
+        private_devices = data.get("hsm_devices_private")
+        if not private_devices:
+            raise RuntimeError("No private keys found in secrets file and host_keys.json does not exist")
+        devices = list(private_devices)
+        with open(host_keys_path, "w") as f:
+            json.dump({"hsm_devices": devices}, f, indent=2)
+
     if not devices:
         raise RuntimeError("No private keys found in host_keys.json")
 
