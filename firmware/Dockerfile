@@ -39,6 +39,10 @@ RUN if [ $(uname -m) = "x86_64" ]; then \
     ./ti_cgt_armllvm_4.0.3.LTS_linux_installer.bin --mode unattended --prefix /opt && \
     rm -f ti_cgt_armllvm_4.0.3.LTS_linux_installer.bin
 
+RUN apt-get install -y git
+
+RUN git clone --depth 1 https://github.com/wolfSSL/wolfssl /opt/wolfssl
+
 WORKDIR /hsm
 
 ENTRYPOINT ["bash", "/hsm/build.sh"]

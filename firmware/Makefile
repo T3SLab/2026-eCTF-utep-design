@@ -63,8 +63,9 @@ CFLAGS += -DHAVE_AESGCM
 CFLAGS += -DHAVE_HMAC
 
 
-WOLFSSL_INC = ./wolfssl/wolfcrypt/src
-CFLAGS += -I./wolfssl
+WOLFSSL_DIR ?= $(if $(wildcard ./wolfssl),./wolfssl,/opt/wolfssl)
+WOLFSSL_INC = $(WOLFSSL_DIR)/wolfcrypt/src
+CFLAGS += -I$(WOLFSSL_DIR)
 
 # Culled Object List (Removed md5.o to save space)
 OBJECTS += $(WOLFSSL_INC)/aes.o $(WOLFSSL_INC)/hash.o
