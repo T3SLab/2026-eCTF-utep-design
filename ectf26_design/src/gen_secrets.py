@@ -135,8 +135,17 @@ def main():
         # Dump the secrets to the file
         f.write(secrets)
 
+    # Write host_keys.json alongside the secrets file.
+    # This mutable queue is read by the firmware build to assign unique key pairs
+    # to each HSM. Keeping it next to the secrets file makes it visible on the host.
+    data = json.loads(secrets.decode())
+    host_keys_path = args.secrets_file.parent / "host_keys.json"
+    with open(host_keys_path, "w") as f:
+        json.dump({"hsm_devices": data["hsm_devices_private"]}, f, indent=2)
+
     # For your own debugging. Feel free to remove
     logger.success(f"Wrote secrets to {str(args.secrets_file.absolute())}")
+    logger.success(f"Wrote host keys to {str(host_keys_path.absolute())}")
 
 
 if __name__ == "__main__":
