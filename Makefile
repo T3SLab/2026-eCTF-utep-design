@@ -19,9 +19,9 @@ global.secrets:
 %.hsm:
 	@if [ ! -f global.secrets ]; then echo 'Must generate global secrets first with\r\n\tmake global.secrets' && false; fi
 	@if [ -z "${PIN}" ] || [ -z "${PERMS}" ]; then echo "Must provide PIN and permissions for HSM. For example:\r\n\tmake $@ PIN=123456 PERMS='1234=RWC'" && false; fi
-	@[ -f host_keys.json ] || touch host_keys.json
-	docker run --rm -v ./firmware:/hsm -v ./global.secrets:/secrets/global.secrets:ro -v ./host_keys.json:/secrets/host_keys.json -v ./$@:/out -e HSM_PIN=${PIN} -e PERMISSIONS='${PERMS}' build-hsm $(BUILDDIR)
+	@mkdir -p build
+	docker run --rm -v ./firmware:/hsm -v ./global.secrets:/secrets/global.secrets:ro -v ./build:/out -e HSM_PIN=${PIN} -e PERMISSIONS='${PERMS}' build-hsm $(BUILDDIR)
+	cp build/hsm.bin ./$@
 
 clean:
-	rm -rfI *.hsm/ global.secrets
-	rm host_keys.json
+	rm -rfI *.hsm build global.secrets host_keys.json
