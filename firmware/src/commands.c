@@ -83,8 +83,8 @@ int list(uint16_t pkt_len, uint8_t *buf) {
     list_response_t file_list;
 
     if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
         delay_ms(4000);
+        print_error("Invalid pin");
         return -1;
     }
 
@@ -146,8 +146,8 @@ int read(uint16_t pkt_len, uint8_t *buf) {
     if (decrypt_sym(current_file.contents, current_file.contents_len,
                     AES_KEY_TABLE[current_file.key_id], current_file.nonce,
                     resp->contents, current_file.tag) != 0) {
-        print_error("Decryption failed");
         delay_ms(4000);
+        print_error("Decryption failed");
         return -1;
     }
 
@@ -180,8 +180,8 @@ int write(uint16_t pkt_len, uint8_t *buf) {
     write_command_t *command = (write_command_t*)buf;
 
     if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
         delay_ms(4000);
+        print_error("Invalid pin");
         return -1;
     }
 
@@ -311,8 +311,8 @@ int receive(uint16_t pkt_len, uint8_t *buf) {
     uint16_t len_recv_msg;
 
     if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
         delay_ms(4000);
+        print_error("Invalid pin");
         return -1;
     }
 
@@ -384,8 +384,8 @@ int interrogate(uint16_t pkt_len, uint8_t *buf) {
 
     // pin check
     if (!check_pin(command->pin)) {
-        print_error("Invalid pin");
         delay_ms(4000);
+        print_error("Invalid pin");
         return -1;
     }
 
