@@ -494,6 +494,7 @@ int listen(uint16_t pkt_len, uint8_t *buf) {
             
             if (!allowed) {
                 print_error("neighbor HSM lacks receive permission");
+                write_packet(TRANSFER_INTERFACE, ERROR_MSG, "no permission", 13);
                 return -1;
             }
 
