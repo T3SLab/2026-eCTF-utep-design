@@ -253,7 +253,7 @@ static int perform_auth(int is_listener)
     int             ret;
 
     if (is_listener) {
-        if (HSM_ID >= 8) {
+        if (HSM_ID >= 8 || HSM_ID < 0) {
             print_error("Auth: invalid local HSM ID\n");
             return -1;
         }
@@ -280,7 +280,7 @@ static int perform_auth(int is_listener)
             return -1;
         }
 
-        if (ann.hsm_id >= 8) {
+        if (ann.hsm_id >= 8 || ann.hsm_id < 0) {
             print_error("Auth: invalid listener HSM ID\n");
             return -1;
         }
