@@ -41,6 +41,13 @@
 */
 int uart_readbyte(int uart_id);
 
+/** @brief Reads the next available character from UART with a timeout.
+ *
+ *  @param uart_id The index of UART to use
+ *  @return The character read on success. -1 on timeout.
+*/
+int uart_readbyte_timeout(int uart_id);
+
 /** @brief Writes a byte to UART.
  *
  *  @param uart_id The index of UART to use

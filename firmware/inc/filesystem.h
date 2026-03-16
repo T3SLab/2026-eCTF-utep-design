@@ -100,6 +100,7 @@ typedef struct {
     group_id_t group_id;
     char name[MAX_NAME_SIZE];
     uint16_t contents_len;
+    uint8_t key_id;
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
     uint8_t contents[MAX_CONTENTS_SIZE];

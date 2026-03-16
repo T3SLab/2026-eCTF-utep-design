@@ -29,6 +29,7 @@ static union {
     receive_response_t recv_resp;
 } shared_buffer;
 
+
 #define current_file (shared_buffer.file)
 #define global_file_info (shared_buffer.resp)
 #define current_recv_resp (shared_buffer.recv_resp)
@@ -143,7 +144,7 @@ int read(uint16_t pkt_len, uint8_t *buf) {
 
     // Decrypt from current_file into the freshly cleared UART buffer
     if (decrypt_sym(current_file.contents, current_file.contents_len,
-                    AES_KEY_TABLE[target_slot], current_file.nonce,
+                    AES_KEY_TABLE[current_file.key_id], current_file.nonce,
                     resp->contents, current_file.tag) != 0) {
         print_error("Decryption failed");
         delay_ms(4000);
@@ -205,8 +206,10 @@ int write(uint16_t pkt_len, uint8_t *buf) {
         command->group_id,
         command->name,
         command->contents_len,
-        NULL  
+        NULL
     );
+
+    current_file.key_id = command->slot;
 
     uint8_t nonce[NONCE_SIZE];
     uint8_t tag[TAG_SIZE];
