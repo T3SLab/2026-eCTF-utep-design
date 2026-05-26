@@ -339,3 +339,6 @@ wolfssl/
 **/secrets.h
 host_keys.json
 uv.lock
+
+## MITRE Team Approval
+approve.json
